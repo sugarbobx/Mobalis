@@ -1,0 +1,269 @@
+MOBALIS — APIS D'OPTIMISATION (recherche juillet 2026)
+================================================================
+Liste exhaustive d'APIs tierces pertinentes pour transformer ce MVP mock
+en produit réel. Classées par priorité d'impact sur CETTE app précisément
+(gestion de centre de répétition scolaire : élèves, répétiteurs, parents,
+séances, exercices, paiements, bulletins).
+
+Chaque entrée : quoi / pourquoi pour MOBALIS / free tier / lien.
+
+
+1. BACKEND & BASE DE DONNÉES (prérequis n°1 — remplace lib/store.ts mock)
+--------------------------------------------------------------------------
+SUPABASE (recommandé)
+  - Postgres + auth (GoTrue) + storage S3-compatible + realtime WebSocket
+    + edge functions, tout-en-un.
+  - Pourquoi : remplace directement le store client-side actuel ET
+    apporte l'auth réelle + le temps réel (utile pour "corrections en
+    attente" côté répétiteur qui se met à jour sans refresh).
+  - https://supabase.com
+
+NEON
+  - Postgres serverless, branching instantané, facturation au compute.
+  - Pourquoi : si on préfère garder l'auth/storage séparés (ex. Clerk +
+    Neon), Neon fait juste la base, très bien intégré à Vercel.
+  - Coût compute/stockage a fortement baissé après rachat Databricks
+    (stockage $1.75 → $0.35/GB-mois).
+  - https://neon.tech
+
+CONVEX
+  - Backend réactif TypeScript, pas de SQL — fonctions TS + sync temps
+    réel automatique.
+  - Pourquoi : pertinent si on veut éviter d'écrire une couche API/store
+    manuelle — modèle proche de ce que fait déjà lib/store.ts mais
+    serveur + persistant + multi-utilisateur nativement.
+  - https://stack.convex.dev/why-choose-convex-database-for-backend
+
+
+2. AUTHENTIFICATION (remplace le "role-switcher" mock)
+--------------------------------------------------------------------------
+CLERK (recommandé)
+  - Auth complète (UI prête, MFA, orgs/SSO) native App Router Next.js.
+  - Pourquoi : 4 rôles actuels (admin/tuteur/parent/élève) → mappable
+    sur les "organizations" Clerk ; free tier 50 000 MAU largement
+    suffisant pour un centre de répétition.
+  - https://clerk.com/articles/clerk-vs-auth0-for-nextjs
+
+BETTER AUTH
+  - Auth self-hosted, code-only, sessions en DB avec invalidation immédiate.
+  - Pourquoi : si contrainte de souveraineté des données élèves (RGPD/
+    données mineurs) — zéro dépendance externe, tout reste sur notre DB.
+  - Recommandé par défaut pour tout nouveau projet Next.js en 2026
+    (Auth.js/NextAuth est en maintenance passive depuis fin 2025).
+  - https://www.buildmvpfast.com/blog/better-auth-vs-clerk-vs-authjs-nextjs-decision-tree-2026
+
+
+3. PAIEMENTS (remplace la table paiements 100% mock actuelle)
+--------------------------------------------------------------------------
+STRIPE BILLING
+  - Standard du marché, webhooks, factures, relances automatiques,
+    abonnements récurrents (forfaits mensuels type "Forfait mensuel -
+    Juillet" déjà dans le mock).
+  - https://schematichq.com/blog/saas-payment-solutions
+
+PADDLE / DODO PAYMENTS (Merchant of Record)
+  - Gèrent la TVA/taxes automatiquement — pertinent si expansion
+    internationale (le nommage "Cameroun" dans le doc de spec suggère
+    marché hors UE/US, à vérifier côté conformité fiscale locale).
+  - https://dodopayments.com/blogs/stripe-alternatives-for-saas
+
+
+4. EMAIL TRANSACTIONNEL (notifications parent §2.3 — actuellement 100% absentes)
+--------------------------------------------------------------------------
+RESEND (recommandé)
+  - SDK TypeScript excellent, conçu pour React/Next.js (React Email pour
+    templater les mails directement en JSX).
+  - Pourquoi : correspond exactement au besoin — envoyer "nouvelle note",
+    "absence", "remarque" aux parents selon leurs préférences déjà
+    modélisées (Parent.preferencesNotification).
+  - Free tier : 3000 emails/mois (100/jour).
+  - https://mailtrap.io/blog/transactional-email-services/
+
+POSTMARK
+  - Meilleure délivrabilité (flux transactionnel isolé), free tier
+    100 emails/mois.
+  - Pourquoi : si le volume de notifications devient critique
+    (rappels de séance la veille, §3.2 point 3) et qu'on ne peut pas
+    se permettre un mail en spam.
+  - https://www.suprsend.com/post/sendgrid-vs-postmark
+
+
+5. SMS (rappels séance/devoir §3.2, absences §2.3)
+--------------------------------------------------------------------------
+TWILIO
+  - $0.0083/SMS US, très documenté, WhatsApp Business API disponible
+    (pertinent pour un usage Afrique/Cameroun où WhatsApp est dominant).
+  - https://www.twilio.com/en-us/pricing
+
+VONAGE
+  - Moins cher sur les volumes internationaux/EU, pay-as-you-go par pays.
+  - Pourquoi comparer : si le centre est au Cameroun, vérifier laquelle
+    des deux couvre le mieux les tarifs SMS locaux (Twilio/Vonage
+    n'affichent pas de tarif Cameroun explicite dans mes résultats —
+    à vérifier au cas par cas avant de choisir).
+  - https://www.vonage.com/communications-apis/pricing/
+
+
+6. VISIO / APPEL VIDÉO (séances "Visio - lien Zoom" déjà dans le mock)
+--------------------------------------------------------------------------
+DAILY.CO (recommandé)
+  - SDK embarquable directement dans l'app (pas de redirection externe
+    vers Zoom), conforme HIPAA/SOC2, migration documentée depuis Twilio.
+  - Pourquoi : remplace le champ texte "lieu: Visio - lien Zoom" par une
+    vraie salle de visio intégrée à la page séance du répétiteur/élève.
+  - https://www.daily.co/competitive/twilio-alternative/
+
+ZOOM VIDEO SDK
+  - Infrastructure Zoom sans l'UI Zoom — contrôle total du look & feel.
+  - Pourquoi : si le centre utilise déjà des comptes Zoom pour d'autres
+    usages, cohérence de marque.
+  - https://developers.zoom.us/docs/video-sdk/twilio/
+
+
+7. IA — CORRECTION/ASSISTANCE PÉDAGOGIQUE (au-delà du mock QCM actuel)
+--------------------------------------------------------------------------
+ANTHROPIC API (Claude)
+  - Pertinent pour DEUX usages précis de l'app :
+    a) Assister la correction manuelle des réponses libres (suggestion
+       de score/commentaire pour le répétiteur, jamais automatique —
+       cohérent avec le principe "validation manuelle obligatoire" déjà
+       appliqué au passage de classe).
+    b) Générer des questions QCM à partir d'un énoncé/chapitre pour
+       accélérer le QcmBuilder existant.
+  - Attention : les études 2026 montrent que l'IA reste peu fiable pour
+    noter des dissertations longues (accord humain 35-65% seulement,
+    Cambridge) — à utiliser en ASSISTANCE, jamais en notation finale
+    automatique, particulièrement pour un public mineur/scolaire.
+  - https://www.anthropic.com/news/introducing-claude-for-education
+
+OPENAI API
+  - Alternative équivalente, mêmes réserves sur la fiabilité de notation.
+  - https://pecollective.com/tools/best-ai-api-providers/
+
+
+8. GÉNÉRATION PDF (bulletins annuels §2.4 — actuellement affichés en HTML seulement)
+--------------------------------------------------------------------------
+@REACT-PDF/RENDERER
+  - Génère un vrai PDF téléchargeable du Bulletin (moyennes, appréciation)
+    directement depuis les composants React existants, côté serveur ou
+    client.
+  - Pourquoi : les bulletins §2.4 sont actuellement de simples cartes
+    HTML — un parent/élève voudra un PDF téléchargeable/imprimable.
+  - https://react-pdf.org/
+
+APITEMPLATE.IO
+  - Génération PDF via templates visuels + API, sans coder le rendu.
+  - Pourquoi : si on veut déléguer le design du bulletin à un non-dev.
+  - https://apitemplate.io/blog/best-pdf-generation-apis/
+
+
+9. MONITORING D'ERREURS (rien en place actuellement)
+--------------------------------------------------------------------------
+SENTRY
+  - Instrumentation complète Next.js (client + server + edge) en une
+    commande (`npx @sentry/wizard -i nextjs`), stack traces, session
+    replay.
+  - Pourquoi : dès la mise en prod réelle, indispensable pour détecter
+    les bugs sur les flux critiques (soumission d'exercice, paiement).
+  - https://docs.sentry.io/platforms/javascript/guides/nextjs/
+
+
+10. ANALYTICS PRODUIT (comprendre l'usage réel du centre)
+--------------------------------------------------------------------------
+POSTHOG (recommandé)
+  - Analytics + feature flags + session replay + surveys en un seul
+    outil, free tier 1M events/mois.
+  - Pourquoi : mesurer quelles fonctionnalités des 15 de l'espace élève
+    (§3.2) sont réellement utilisées avant d'investir plus de temps
+    dessus.
+  - https://posthog.com/blog/posthog-vs-mixpanel
+
+
+11. NOTIFICATIONS PUSH / IN-APP (au-delà des toasts sonner actuels)
+--------------------------------------------------------------------------
+NOVU
+  - Open-source, self-hostable, orchestration multi-canal (push+email+
+    SMS+in-app) depuis une seule API — remplacerait à terme le mélange
+    Resend+Twilio+toasts par une couche unifiée.
+  - https://github.com/novuhq/novu
+
+ONESIGNAL
+  - Le plus simple à démarrer pour du push web pur, gratuit illimité en
+    mobile push.
+  - https://onesignal.com/blog/the-complete-guide-to-push-notification-services-in-2026/
+
+
+12. RECHERCHE (bibliothèque d'exercices, ressources — filtrage actuel = JS pur)
+--------------------------------------------------------------------------
+MEILISEARCH (recommandé)
+  - Open-source, self-hostable gratuitement, <50ms, hybrid search (mots-
+    clés + sémantique) — pertinent seulement si la bibliothèque
+    d'exercices/ressources grossit au-delà de quelques centaines
+    d'entrées (aujourd'hui le filtrage par matière/tabs suffit).
+  - https://www.meilisearch.com/blog/algolia-vs-typesense
+
+TYPESENSE
+  - Alternative équivalente, cluster Raft natif pour la haute
+    disponibilité.
+  - https://typesense.org/typesense-vs-algolia-vs-elasticsearch-vs-meilisearch/
+
+
+13. UPLOAD DE FICHIERS (fiches/ressources actuellement statiques dans le mock)
+--------------------------------------------------------------------------
+UPLOADTHING
+  - Type-safe de bout en bout pour du TypeScript full-stack, zéro
+    config, idéal pour un MVP qui grandit.
+  - Pourquoi : permettrait aux répétiteurs d'uploader de vraies fiches
+    PDF/images au lieu du texte statique actuel dans lib/mock/ressources.
+  - https://ogblocks.dev/blog/best-file-upload-api-for-nextjs
+
+CLOUDFLARE R2 (via S3-compatible API)
+  - Zéro coût de sortie (egress gratuit) — pertinent dès que le volume
+    de téléchargement de ressources devient significatif.
+  - https://apiscout.dev/guides/uploadthing-vs-cloudflare-r2-vs-s3-nextjs-2026
+
+CLOUDINARY
+  - Transformation d'images à la volée (avatars élèves/répétiteurs,
+    compression auto WebP/AVIF).
+  - Free tier : 25 crédits/mois (~25GB stockage ou 25k transformations).
+  - https://cloudinary.com/documentation/upload_assets_in_nextjs_tutorial
+
+
+14. CALENDRIER (emploi du temps séances — actuellement stocké en dur, pas de sync externe)
+--------------------------------------------------------------------------
+GOOGLE CALENDAR API
+  - Pourquoi : beaucoup de parents/répétiteurs vivent déjà dans Google
+    Calendar — permettre l'export/sync des séances évite le double
+    calendrier.
+  - https://developers.google.com/workspace/calendar/api/guides/overview
+
+CAL.COM (API unifiée)
+  - Gère la dispo des répétiteurs + anti-double-booking + sync multi-
+    calendrier (Google/Outlook) en une API.
+  - Pourquoi : pertinent si on veut automatiser la prise de séance
+    supplémentaire (§3.2 point 13 "Demande d'aide/séance supplémentaire")
+    plutôt que le flux manuel actuel.
+  - https://cal.com/unified
+
+
+PRIORITÉS RECOMMANDÉES (ordre d'implémentation suggéré)
+================================================================
+1. Supabase (ou Neon+Clerk) — sans backend réel, rien d'autre ne tient.
+2. Clerk / Better Auth — auth réelle, remplace le role-switcher mock.
+3. Resend — notifications parent (§2.3), fonctionnalité déjà modélisée
+   mais jamais réellement envoyée.
+4. Stripe — paiements réels, remplace la table mock actuelle.
+5. Sentry — dès la première mise en prod, non négociable.
+6. @react-pdf/renderer — bulletins téléchargeables (§2.4), petit effort
+   pour un gain perçu élevé.
+7. Daily.co — si l'usage visio devient réel (aujourd'hui juste un
+   champ texte).
+8. Le reste (SMS, IA, search, push, upload, calendrier) selon les
+   besoins qui émergent une fois le backend réel en place.
+
+
+NOTE IMPORTANTE
+================================================================
+Toutes les infos ci-dessus proviennent d'une recherche web (juillet 2026),
+sourcée par requête dans le tableau ci-dessous — à revérifier au moment de
+l'implémentation (pricing/features évoluent vite sur ce marché).
