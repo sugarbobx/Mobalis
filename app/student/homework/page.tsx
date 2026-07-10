@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { CheckSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { EmptyState } from "@/components/shared/empty-state";
 import { AUJOURDHUI } from "@/lib/mock";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
@@ -22,6 +24,17 @@ export default function StudentHomeworkPage() {
         <p className="text-sm text-muted-foreground">Triés par date d&apos;échéance.</p>
       </div>
 
+      {devoirs.length === 0 ? (
+        <Card>
+          <CardContent>
+            <EmptyState
+              icon={CheckSquare}
+              title="Aucun devoir pour l'instant"
+              hint="Tes exercices assignés par tes répétiteurs apparaîtront ici."
+            />
+          </CardContent>
+        </Card>
+      ) : (
       <div className="space-y-2">
         {devoirs.map((d) => {
           const enRetard = d.assignation.statut === "a_faire" && d.assignation.dateEcheance < AUJOURDHUI;
@@ -52,6 +65,7 @@ export default function StudentHomeworkPage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

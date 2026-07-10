@@ -1,20 +1,21 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { FileText, BookOpen, ScrollText } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
+import type { Ressource } from "@/lib/mock";
 
-const TYPE_LABELS: Record<string, string> = {
-  fiche: "Fiche",
-  resume: "Résumé",
-  correction: "Correction",
-};
+const CATEGORIES: { value: Ressource["type"]; label: string }[] = [
+  { value: "cours", label: "Cours" },
+  { value: "ancienne_epreuve", label: "Anciennes épreuves" },
+];
 
 export default function StudentResourcesPage() {
-  const { getMatiere, getEleve } = useStore();
+  const { getEleve } = useStore();
   const CURRENT_STUDENT_ID = useCurrentUser().id;
   const eleve = getEleve(CURRENT_STUDENT_ID);
   if (!eleve) return null;
@@ -24,23 +25,23 @@ export default function StudentResourcesPage() {
       <div>
         <h1 className="text-xl font-semibold">Ressources</h1>
         <p className="text-sm text-muted-foreground">
-          Fiches, résumés et corrections partagés par tes répétiteurs, filtrables par matière.
+          Cours et anciennes épreuves partagés par tes répétiteurs, classés par catégorie et par matière.
         </p>
       </div>
 
-      <Tabs defaultValue="tous">
+      <Tabs defaultValue="toutes">
         <TabsList>
-          <TabsTrigger value="tous">Toutes</TabsTrigger>
-          {eleve.matiereIds.map((id) => (
-            <TabsTrigger key={id} value={id}>{getMatiere(id)?.nom}</TabsTrigger>
+          <TabsTrigger value="toutes">Toutes</TabsTrigger>
+          {CATEGORIES.map((c) => (
+            <TabsTrigger key={c.value} value={c.value}>{c.label}</TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="tous" className="mt-4">
-          <RessourceGrid matiereIds={eleve.matiereIds} />
+        <TabsContent value="toutes" className="mt-4">
+          <RessourcesParMatiere matiereIds={eleve.matiereIds} />
         </TabsContent>
-        {eleve.matiereIds.map((id) => (
-          <TabsContent key={id} value={id} className="mt-4">
-            <RessourceGrid matiereIds={[id]} />
+        {CATEGORIES.map((c) => (
+          <TabsContent key={c.value} value={c.value} className="mt-4">
+            <RessourcesParMatiere matiereIds={eleve.matiereIds} categorie={c.value} />
           </TabsContent>
         ))}
       </Tabs>
@@ -48,27 +49,43 @@ export default function StudentResourcesPage() {
   );
 }
 
-function RessourceGrid({ matiereIds }: { matiereIds: string[] }) {
+function RessourcesParMatiere({ matiereIds, categorie }: { matiereIds: string[]; categorie?: Ressource["type"] }) {
   const { getMatiere, getRessourcesByMatiere } = useStore();
-  const ressources = matiereIds.flatMap((id) => getRessourcesByMatiere(id));
-  if (ressources.length === 0) {
-    return <p className="text-sm text-muted-foreground">Aucune ressource disponible.</p>;
+  const sections = matiereIds
+    .map((matiereId) => ({
+      matiereId,
+      ressources: getRessourcesByMatiere(matiereId).filter((r) => !categorie || r.type === categorie),
+    }))
+    .filter((s) => s.ressources.length > 0);
+
+  if (sections.length === 0) {
+    return <EmptyState icon={FileText} title="Aucune ressource disponible" hint="Les ressources partagées par tes répétiteurs apparaîtront ici." />;
   }
+
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {ressources.map((r) => (
-        <Card key={r.id}>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">{getMatiere(r.matiereId)?.nom}</Badge>
-              <Badge variant="secondary">{TYPE_LABELS[r.type]}</Badge>
-            </div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileText className="size-4 text-primary" /> {r.titre}
-            </CardTitle>
-            <CardDescription>{r.description}</CardDescription>
-          </CardHeader>
-        </Card>
+    <div className="space-y-6">
+      {sections.map(({ matiereId, ressources }) => (
+        <div key={matiereId} className="space-y-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">{getMatiere(matiereId)?.nom}</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {ressources.map((r) => (
+              <Card key={r.id}>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      {r.type === "cours" ? <BookOpen className="size-3" /> : <ScrollText className="size-3" />}
+                      {r.type === "cours" ? "Cours" : "Ancienne épreuve"}
+                    </Badge>
+                  </div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="size-4 text-primary" /> {r.titre}
+                  </CardTitle>
+                  <CardDescription>{r.description}</CardDescription>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );

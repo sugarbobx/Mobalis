@@ -310,7 +310,7 @@ const mapDemandeAide = (r: Row): DemandeAide => ({
   statut: r.statut,
 });
 
-const mapBadge = (r: Row): Badge => ({ id: r.id, nom: r.nom, description: r.description, icone: r.icone });
+const mapBadge = (r: Row): Badge => ({ id: r.id, code: r.code, nom: r.nom, description: r.description, icone: r.icone });
 const mapBadgeObtenu = (r: Row): BadgeObtenu => ({ badgeId: r.badge_id, eleveId: r.eleve_id, date: r.date });
 
 const mapObjectif = (r: Row): Objectif => ({
@@ -839,6 +839,39 @@ export function useStore() {
       const { error } = await supabase.from("eleves").update(payload).eq("id", id);
       if (error) return;
       store.setState((prev) => ({ ...prev, eleves: prev.eleves.map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
+    },
+    assignerMatiereEleve: async (eleveId: string, matiereId: string, assigner: boolean) => {
+      const supabase = requireOnlineClient();
+      if (assigner) {
+        const { error } = await supabase.from("eleve_matieres").insert({ eleve_id: eleveId, matiere_id: matiereId });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("eleve_matieres").delete().eq("eleve_id", eleveId).eq("matiere_id", matiereId);
+        if (error) throw error;
+      }
+      store.setState((prev) => ({
+        ...prev,
+        eleves: prev.eleves.map((e) =>
+          e.id === eleveId
+            ? { ...e, matiereIds: assigner ? [...e.matiereIds, matiereId] : e.matiereIds.filter((m) => m !== matiereId) }
+            : e
+        ),
+      }));
+    },
+    evaluerBadges: async (eleveId: string) => {
+      const supabase = requireOnlineClient();
+      const { data, error } = await supabase.rpc("evaluer_badges", { p_eleve_id: eleveId });
+      if (error || !data) return [] as string[];
+      const nouveauxCodes = data as string[];
+      if (nouveauxCodes.length === 0) return [];
+      const aujourdHui = new Date().toISOString().slice(0, 10);
+      store.setState((prev) => {
+        const nouveauxBadges = prev.badges
+          .filter((b) => nouveauxCodes.includes(b.code))
+          .map((b) => ({ badgeId: b.id, eleveId, date: aujourdHui }));
+        return { ...prev, badgesObtenus: [...prev.badgesObtenus, ...nouveauxBadges] };
+      });
+      return nouveauxCodes;
     },
 
     // --- §2.4 fin d'année ---

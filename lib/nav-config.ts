@@ -20,6 +20,7 @@ import {
   Swords,
   TrendingUp,
   UserCircle,
+  Users,
 } from "lucide-react";
 import type { Role } from "@/lib/mock";
 
@@ -39,6 +40,8 @@ export const ROLE_LABELS: Record<Role, string> = {
 export const NAV_ITEMS: Record<Role, NavItem[]> = {
   admin: [
     { label: "Tableau de bord", href: "/admin", icon: LayoutDashboard },
+    { label: "Élèves", href: "/admin/eleves", icon: GraduationCap },
+    { label: "Répétiteurs", href: "/admin/repetiteurs", icon: Users },
     { label: "Matières", href: "/admin/subjects", icon: BookOpen },
     { label: "Bibliothèque d'exercices", href: "/admin/exercises", icon: Library },
     { label: "Fin d'année", href: "/admin/fin-annee", icon: GraduationCap },

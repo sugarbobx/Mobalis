@@ -1,37 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Award, FileText } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useEffect } from "react";
+import { Award, CalendarCheck, Trophy, Flame, TrendingUp, Rocket, Zap, Crown, Star, FileText, type LucideIcon } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MiniLineChart } from "@/components/shared/mini-line-chart";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
-import { BulletinDownloadButton } from "@/components/shared/bulletin-download-button";
-import { getSequences, type Sequence } from "@/lib/bulletin-sequentiel";
+import { cn } from "@/lib/utils";
+
+const BADGE_ICONS: Record<string, LucideIcon> = { CalendarCheck, Trophy, Flame, TrendingUp, Rocket, Zap, Crown, Star, Award };
 
 export default function StudentGradesPage() {
-  const { getEvaluationsByMatiere, getMatiere, getObjectifsByEleve, getBadgesByEleve, getEleve, getBulletinsByEleve, getRepetiteur } = useStore();
+  const { getEvaluationsByMatiere, getMatiere, getObjectifsByEleve, getBadgesByEleve, getEleve, getBulletinsByEleve, getRepetiteur, badges: badgesCatalogue, evaluerBadges } = useStore();
   const CURRENT_STUDENT_ID = useCurrentUser().id;
   const eleve = getEleve(CURRENT_STUDENT_ID);
   const objectifs = getObjectifsByEleve(CURRENT_STUDENT_ID);
-  const badges = getBadgesByEleve(CURRENT_STUDENT_ID);
+  const badgesObtenus = getBadgesByEleve(CURRENT_STUDENT_ID);
   const bulletins = getBulletinsByEleve(CURRENT_STUDENT_ID);
   const remarques = (eleve?.matiereIds ?? [])
     .flatMap((id) => getEvaluationsByMatiere(CURRENT_STUDENT_ID, id))
     .filter((e) => e.visibleEleve && e.remarque)
     .sort((a, b) => b.date.localeCompare(a.date));
-  const [sequences, setSequences] = useState<Sequence[]>([]);
-  const [sequenceId, setSequenceId] = useState<string | null>(null);
+
   useEffect(() => {
-    void getSequences().then((s) => {
-      setSequences(s);
-      if (s.length > 0) setSequenceId(s[s.length - 1].id);
-    });
-  }, []);
+    if (CURRENT_STUDENT_ID) void evaluerBadges(CURRENT_STUDENT_ID);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [CURRENT_STUDENT_ID]);
+
   if (!eleve) return null;
+
+  const dateObtentionParBadge = new Map(badgesObtenus.map((b) => [b.id, b.dateObtention]));
 
   return (
     <div className="space-y-6">
@@ -57,28 +57,6 @@ export default function StudentGradesPage() {
                 </div>
               </div>
             ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {sequences.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><FileText className="size-4" /> Bulletin par séquence</CardTitle>
-            <CardDescription>Bulletin détaillé (classement, coefficients) d&apos;une séquence donnée.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-3">
-            <Select
-              items={Object.fromEntries(sequences.map((s) => [s.id, s.libelle]))}
-              value={sequenceId ?? undefined}
-              onValueChange={(v) => v && setSequenceId(v)}
-            >
-              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {sequences.map((s) => <SelectItem key={s.id} value={s.id}>{s.libelle}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {sequenceId && <BulletinDownloadButton eleveId={CURRENT_STUDENT_ID} sequenceId={sequenceId} />}
           </CardContent>
         </Card>
       )}
@@ -142,17 +120,33 @@ export default function StudentGradesPage() {
           <CardHeader>
             <CardTitle>Badges & récompenses</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            {badges.map((b) => (
-              <div key={b.id} className="card-interactive flex w-40 flex-col items-center gap-2 rounded-lg border border-border px-3 py-4 text-center">
-                <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Award className="size-5" />
-                </span>
-                <span className="text-sm font-medium">{b.nom}</span>
-                <span className="text-xs text-muted-foreground">{b.description}</span>
-                <Badge variant="outline" className="text-[10px]">{b.dateObtention}</Badge>
-              </div>
-            ))}
+          <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {badgesCatalogue.map((b) => {
+              const dateObtention = dateObtentionParBadge.get(b.id);
+              const obtenu = !!dateObtention;
+              const Icon = BADGE_ICONS[b.icone] ?? Award;
+              return (
+                <div
+                  key={b.id}
+                  className={cn(
+                    "flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center transition-opacity",
+                    obtenu ? "card-interactive border-primary/30 bg-primary/5" : "border-border opacity-50 grayscale"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-10 items-center justify-center rounded-full",
+                      obtenu ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="text-sm font-medium">{b.nom}</span>
+                  <span className="text-xs text-muted-foreground">{b.description}</span>
+                  <Badge variant="outline" className="text-[10px]">{obtenu ? dateObtention : "Non obtenu"}</Badge>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       </div>

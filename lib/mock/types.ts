@@ -169,7 +169,7 @@ export interface Ressource {
   id: string;
   matiereId: string;
   titre: string;
-  type: "fiche" | "resume" | "correction";
+  type: "cours" | "ancienne_epreuve";
   seanceId?: string;
   description: string;
 }
@@ -195,6 +195,7 @@ export interface DemandeAide {
 
 export interface Badge {
   id: string;
+  code: string;
   nom: string;
   description: string;
   icone: string;

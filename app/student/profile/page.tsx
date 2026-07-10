@@ -5,9 +5,7 @@ import { Smile, Frown } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -15,33 +13,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { CompteLectureSeule } from "@/components/shared/compte-lecture-seule";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
 
-const STYLES = ["Visuel", "Auditif", "Kinesthésique"];
-const STYLE_ITEMS = Object.fromEntries(STYLES.map((s) => [s, s]));
-
 export default function StudentProfilePage() {
-  const { getMatieresActives, getMatiere, getSeancesByEleve, autoEvaluations, addAutoEvaluation, getEleve } = useStore();
+  const { getMatiere, getSeancesByEleve, autoEvaluations, addAutoEvaluation, getEleve } = useStore();
   const CURRENT_STUDENT_ID = useCurrentUser().id;
   const eleve =
     getEleve(CURRENT_STUDENT_ID) ??
     { id: "", nom: "", prenom: "", classe: "2nde" as const, serie: "C" as const, styleApprentissage: "", parentIds: [], repetiteurIds: [], matiereIds: [], avatarInitiales: "", dateEntree: "", classeEntree: "2nde" as const, statutCompte: "actif" as const };
   const lectureSeule = eleve.statutCompte === "diplome";
-  const matieresActives = getMatieresActives(eleve.serie);
-
-  const [matieresSuivies, setMatieresSuivies] = useState<string[]>(eleve.matiereIds);
-  const [style, setStyle] = useState(eleve.styleApprentissage);
 
   const autoEvals = autoEvaluations.filter((a) => a.eleveId === CURRENT_STUDENT_ID);
   const seances = getSeancesByEleve(CURRENT_STUDENT_ID);
   const [seanceId, setSeanceId] = useState(seances[0]?.id ?? "");
   const [chapitre, setChapitre] = useState("");
-
-  function toggleMatiere(id: string) {
-    setMatieresSuivies((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
-  }
 
   function ajouterAutoEval(moment: "avant" | "apres", ressenti: "a_l_aise" | "pas_a_l_aise") {
     if (lectureSeule) return;
@@ -75,39 +63,14 @@ export default function StudentProfilePage() {
           <CardDescription>Informations et préférences d&apos;apprentissage.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Classe / Série</Label>
-              <div className="flex h-8 items-center gap-2 rounded-lg border border-border bg-muted/30 px-2.5 text-sm">
-                {eleve.classe} · Série {eleve.serie}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Modifiable uniquement par l&apos;administration, en fin d&apos;année scolaire.
-              </p>
+          <div className="space-y-1.5">
+            <Label>Classe / Série</Label>
+            <div className="flex h-8 items-center gap-2 rounded-lg border border-border bg-muted/30 px-2.5 text-sm">
+              {eleve.classe} · Série {eleve.serie}
             </div>
-            <div className="space-y-1.5">
-              <Label>Style d&apos;apprentissage</Label>
-              <Select items={STYLE_ITEMS} value={style} onValueChange={(v) => v && setStyle(v)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {STYLES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Matières suivies</Label>
-            <div className="flex flex-wrap gap-3">
-              {matieresActives.map((m) => (
-                <label key={m.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">
-                  <Checkbox checked={matieresSuivies.includes(m.id)} onCheckedChange={() => toggleMatiere(m.id)} />
-                  {m.nom}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {matieresSuivies.map((id) => <Badge key={id} variant="secondary">{getMatiere(id)?.nom}</Badge>)}
+            <p className="text-xs text-muted-foreground">
+              Modifiable uniquement par l&apos;administration, en fin d&apos;année scolaire.
+            </p>
           </div>
         </CardContent>
       </Card>

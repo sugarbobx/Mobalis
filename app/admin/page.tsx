@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, GraduationCap, Users, BookOpen, Plus } from "lucide-react";
+import Link from "next/link";
+import { CreditCard, GraduationCap, Users, BookOpen, Plus, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,9 +30,11 @@ import {
 import { useStore } from "@/lib/store";
 
 export default function AdminDashboardPage() {
-  const { eleves, parents, matieres, repetiteurs, paiements, addPaiement, getMatiere, getMatieresActives, getEleve, getParent, getRepetiteur } = useStore();
+  const { eleves, parents, matieres, repetiteurs, paiements, addPaiement, getMatieresActives, getEleve } = useStore();
   const matieresActives = getMatieresActives();
   const paiementsEnAttente = paiements.filter((p) => p.statut === "en_attente" || p.statut === "en_retard");
+  const dernieresInscriptions = eleves.slice(0, 5);
+  const derniersRepetiteurs = repetiteurs.slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -53,87 +55,41 @@ export default function AdminDashboardPage() {
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Inscriptions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Élève</TableHead>
-                <TableHead>Classe / Série</TableHead>
-                <TableHead>Entrée</TableHead>
-                <TableHead>Matières suivies</TableHead>
-                <TableHead>Répétiteur(s)</TableHead>
-                <TableHead>Parent(s)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {eleves.map((eleve) => (
-                <TableRow key={eleve.id}>
-                  <TableCell className="font-medium">{eleve.prenom} {eleve.nom}</TableCell>
-                  <TableCell>{eleve.classe} · {eleve.serie}</TableCell>
-                  <TableCell>
-                    <span title={eleve.historiqueExterne} className="text-sm text-muted-foreground">
-                      {eleve.dateEntree}
-                      {eleve.classeEntree !== "2nde" && ` (direct ${eleve.classeEntree})`}
-                      {eleve.historiqueExterne && " *"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {eleve.matiereIds.map((id) => (
-                        <Badge key={id} variant="secondary">{getMatiere(id)?.nom}</Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {eleve.repetiteurIds.map((id) => getRepetiteur(id)).map((r) => r && `${r.prenom} ${r.nom}`).join(", ")}
-                  </TableCell>
-                  <TableCell>
-                    {eleve.parentIds.map((id) => getParent(id)).map((p) => p && `${p.prenom} ${p.nom}`).join(", ")}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <CardTitle>Dernières inscriptions</CardTitle>
+            <Link href="/admin/eleves" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              Voir tout <ArrowRight className="size-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {dernieresInscriptions.map((eleve) => (
+              <div key={eleve.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span className="font-medium">{eleve.prenom} {eleve.nom}</span>
+                <span className="text-muted-foreground">{eleve.classe} · {eleve.serie}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Assignation des répétiteurs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Répétiteur</TableHead>
-                <TableHead>Matières enseignées</TableHead>
-                <TableHead>Élèves suivis</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {repetiteurs.map((rep) => (
-                <TableRow key={rep.id}>
-                  <TableCell className="font-medium">{rep.prenom} {rep.nom}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {rep.matiereIds.map((id) => (
-                        <Badge key={id} variant="secondary">{getMatiere(id)?.nom}</Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {rep.eleveIds.map((id) => getEleve(id)).map((e) => e && `${e.prenom} ${e.nom}`).join(", ")}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <CardTitle>Répétiteurs</CardTitle>
+            <Link href="/admin/repetiteurs" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              Voir tout <ArrowRight className="size-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {derniersRepetiteurs.map((rep) => (
+              <div key={rep.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span className="font-medium">{rep.prenom} {rep.nom}</span>
+                <span className="text-muted-foreground">{rep.eleveIds.length} élève(s)</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">

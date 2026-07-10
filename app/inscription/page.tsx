@@ -35,7 +35,7 @@ export default function InscriptionPage() {
       if (error) throw error;
       if (!data.user) throw new Error("Compte non créé — réessaie.");
 
-      await creerCentre(nomCentre, ville, data.user.id, nom, prenom);
+      await creerCentre(nomCentre, ville, data.user.id, email, nom, prenom);
       setSucces(true);
     } catch (err) {
       setErreur(err instanceof Error ? err.message : "Échec de l'inscription.");
