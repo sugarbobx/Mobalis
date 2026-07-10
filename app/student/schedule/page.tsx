@@ -3,8 +3,8 @@
 import { MapPin, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { getRepetiteur, CURRENT_STUDENT_ID } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 function formatJour(date: string) {
   const d = new Date(`${date}T00:00:00`);
@@ -13,7 +13,8 @@ function formatJour(date: string) {
 }
 
 export default function StudentSchedulePage() {
-  const { getSeancesByEleve, getMatiere } = useStore();
+  const { getSeancesByEleve, getMatiere, getRepetiteur } = useStore();
+  const CURRENT_STUDENT_ID = useCurrentUser().id;
   const seances = getSeancesByEleve(CURRENT_STUDENT_ID);
   const parDate = new Map<string, typeof seances>();
   for (const s of seances) {

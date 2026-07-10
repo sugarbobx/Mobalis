@@ -19,12 +19,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
-import { CURRENT_TUTOR_ID } from "@/lib/mock";
 import type { Soumission } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 export default function TutorCorrectionsPage() {
   const { soumissions, assignations, getAssignation, getExercice, getMatiere, updateSoumission, updateAssignation, getEleve } = useStore();
+  const CURRENT_TUTOR_ID = useCurrentUser().id;
   const [ouverte, setOuverte] = useState<Soumission | null>(null);
   const [score, setScore] = useState("");
   const [commentaire, setCommentaire] = useState("");

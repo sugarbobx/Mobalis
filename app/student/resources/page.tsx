@@ -4,8 +4,8 @@ import { FileText } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getRessourcesByMatiere, CURRENT_STUDENT_ID } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 const TYPE_LABELS: Record<string, string> = {
   fiche: "Fiche",
@@ -15,7 +15,9 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function StudentResourcesPage() {
   const { getMatiere, getEleve } = useStore();
-  const eleve = getEleve(CURRENT_STUDENT_ID)!;
+  const CURRENT_STUDENT_ID = useCurrentUser().id;
+  const eleve = getEleve(CURRENT_STUDENT_ID);
+  if (!eleve) return null;
 
   return (
     <div className="space-y-6">
@@ -47,7 +49,7 @@ export default function StudentResourcesPage() {
 }
 
 function RessourceGrid({ matiereIds }: { matiereIds: string[] }) {
-  const { getMatiere } = useStore();
+  const { getMatiere, getRessourcesByMatiere } = useStore();
   const ressources = matiereIds.flatMap((id) => getRessourcesByMatiere(id));
   if (ressources.length === 0) {
     return <p className="text-sm text-muted-foreground">Aucune ressource disponible.</p>;

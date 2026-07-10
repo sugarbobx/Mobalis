@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NotebookPen } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
@@ -20,12 +21,15 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CURRENT_TUTOR_ID, ANNEE_SCOLAIRE } from "@/lib/mock";
+import { ANNEE_SCOLAIRE } from "@/lib/mock";
 import type { Seance } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
+import { getSequences, type Sequence } from "@/lib/bulletin-sequentiel";
 
 export default function TutorCahierPage() {
   const { getSeancesByRepetiteur, getMatiere, evaluations: toutesEvaluations, updateSeance, addEvaluation, getEleve } = useStore();
+  const CURRENT_TUTOR_ID = useCurrentUser().id;
   const seances = getSeancesByRepetiteur(CURRENT_TUTOR_ID);
   const evaluations = toutesEvaluations.filter((e) => e.repetiteurId === CURRENT_TUTOR_ID);
   const [seanceOuverte, setSeanceOuverte] = useState<Seance | null>(null);
@@ -33,6 +37,15 @@ export default function TutorCahierPage() {
   const [present, setPresent] = useState(true);
   const [note, setNote] = useState("");
   const [remarque, setRemarque] = useState("");
+  const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [sequenceId, setSequenceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getSequences().then((s) => {
+      setSequences(s);
+      if (s.length > 0) setSequenceId(s[s.length - 1].id);
+    });
+  }, []);
 
   function ouvrir(seance: Seance) {
     setSeanceOuverte(seance);
@@ -51,7 +64,6 @@ export default function TutorCahierPage() {
     updateSeance(seanceOuverte.id, { contenu, present, statut: "terminee" });
     if (note.trim() || remarque.trim()) {
       addEvaluation({
-        id: `ev-${Date.now()}`,
         eleveId: seanceOuverte.eleveId,
         repetiteurId: CURRENT_TUTOR_ID,
         matiereId: seanceOuverte.matiereId,
@@ -60,6 +72,7 @@ export default function TutorCahierPage() {
         remarque: remarque.trim(),
         visibleEleve: true,
         anneeScolaire: ANNEE_SCOLAIRE,
+        sequenceId,
       });
     }
     const eleve = getEleve(seanceOuverte.eleveId);
@@ -185,6 +198,21 @@ export default function TutorCahierPage() {
                   <Label htmlFor="contenu">Contenu de la séance (cahier de texte)</Label>
                   <Textarea id="contenu" value={contenu} onChange={(e) => setContenu(e.target.value)} placeholder="Ce qui a été vu en séance..." rows={3} />
                 </div>
+                {sequences.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="sequence">Séquence</Label>
+                    <Select
+                      items={Object.fromEntries(sequences.map((s) => [s.id, s.libelle]))}
+                      value={sequenceId ?? undefined}
+                      onValueChange={(v) => v && setSequenceId(v)}
+                    >
+                      <SelectTrigger id="sequence" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {sequences.map((s) => <SelectItem key={s.id} value={s.id}>{s.libelle}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-[100px_1fr] gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="note">Note /20</Label>

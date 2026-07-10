@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ANNEE_SCOLAIRE } from "@/lib/mock";
-import type { Classe, Serie, PassageClasse, MentionBac } from "@/lib/mock";
+import type { Classe, Serie, MentionBac } from "@/lib/mock";
 import { useStore } from "@/lib/store";
 
 const CLASSE_SUIVANTE: Record<Classe, Classe | null> = { "2nde": "1ère", "1ère": "Tle", Tle: null };
@@ -68,13 +68,14 @@ export default function AdminFinAnneePage() {
     }
     const classeSuivante = CLASSE_SUIVANTE[classe];
     if (!classeSuivante) return; // Tle : pas de passage, voir section Sortie
-    const passage: PassageClasse = {
-      id: `passage-${eleveId}-${Date.now()}`,
+    const statut: "preconise_passage" | "preconise_redoublement" =
+      moyenne >= SEUIL_PASSAGE ? "preconise_passage" : "preconise_redoublement";
+    const passage = {
       eleveId,
       anneeScolaire: ANNEE_SCOLAIRE,
       classeActuelle: classe,
       classeSuivante: moyenne >= SEUIL_PASSAGE ? classeSuivante : classe,
-      statut: moyenne >= SEUIL_PASSAGE ? "preconise_passage" : "preconise_redoublement",
+      statut,
       moyenneGenerale: moyenne,
     };
     addPassageClasse(passage);
@@ -94,7 +95,6 @@ export default function AdminFinAnneePage() {
       return;
     }
     addBulletin({
-      id: `bulletin-${eleveId}-${Date.now()}`,
       eleveId,
       anneeScolaire: ANNEE_SCOLAIRE,
       moyennesParMatiere,
@@ -107,7 +107,6 @@ export default function AdminFinAnneePage() {
   function genererSuggestion(eleveId: string, serie: Serie, matiereFaibleId: string, moyenneFaible: number) {
     const alternatives: Serie[] = ["A", "C", "D", "SES"].filter((s) => s !== serie) as Serie[];
     addSuggestionReorientation({
-      id: `sugg-${eleveId}-${Date.now()}`,
       eleveId,
       anneeScolaire: ANNEE_SCOLAIRE,
       serieActuelle: serie,

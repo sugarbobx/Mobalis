@@ -29,7 +29,8 @@ import {
 import { QcmBuilder, questionVide, questionsValides } from "@/components/shared/qcm-builder";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useStore } from "@/lib/store";
-import type { Exercice, QuestionQCM, TypeExercice } from "@/lib/mock";
+import { useCurrentUser } from "@/lib/current-user-context";
+import type { Exercice, QuestionQCM } from "@/lib/mock";
 
 // L'admin gère la bibliothèque commune : QCM et réponse libre uniquement.
 // Les exercices "diagnostic" sont créés par le répétiteur, à l'entrée d'un élève (§2.2).
@@ -37,6 +38,7 @@ const TYPE_LABELS: Record<"qcm" | "libre", string> = { qcm: "QCM", libre: "Répo
 
 export default function AdminExercisesPage() {
   const { exercices, getMatieresActives, addExercice } = useStore();
+  const CURRENT_ADMIN_ID = useCurrentUser().id;
   const [open, setOpen] = useState(false);
   const matieresActives = getMatieresActives();
 
@@ -58,22 +60,21 @@ export default function AdminExercisesPage() {
     setQuestions([questionVide()]);
   }
 
-  function creerExercice() {
+  async function creerExercice() {
     if (!formValide) return;
-    const nouveau: Exercice = {
-      id: `ex-${Date.now()}`,
+    const nouveau = {
       matiereId,
       type,
       titre: titre.trim(),
       consigne: consigne.trim() || "Consigne à préciser.",
-      createur: "admin",
-      createurId: "admin1",
+      createur: "admin" as const,
+      createurId: CURRENT_ADMIN_ID,
       dansBibliotheque: true,
       ...(type === "qcm"
         ? { questions: questions.map((q) => ({ ...q, question: q.question.trim(), choix: q.choix.map((c) => c.trim()) })) }
         : { enonce: enonce.trim() || "Énoncé à préciser." }),
     };
-    addExercice(nouveau);
+    await addExercice(nouveau);
     resetForm();
     setOpen(false);
     toast.success(`Exercice « ${nouveau.titre} » ajouté à la bibliothèque`);

@@ -1,6 +1,8 @@
--- MOBALIS — schéma Postgres/Supabase
+-- MOBALIS — schéma Postgres/Supabase (migration 0001)
 -- Migration depuis lib/mock/types.ts vers un vrai backend relationnel.
--- Pas encore appliqué — à valider avant exécution dans le SQL Editor Supabase.
+-- Déjà appliquée en production — voir supabase/migrations/README.md pour le
+-- workflow (pas de CLI Supabase lié à ce jour, application manuelle via le
+-- SQL Editor du dashboard, dans l'ordre des fichiers).
 
 create extension if not exists pgcrypto; -- gen_random_uuid()
 
@@ -49,6 +51,7 @@ create table repetiteurs (
   user_id uuid unique references auth.users(id),
   nom text not null,
   prenom text not null,
+  email text unique, -- renseigné par l'admin, sert à créer le login (voir /admin/accounts)
   avatar_initiales text not null,
   created_at timestamptz not null default now()
 );
@@ -78,6 +81,7 @@ create table eleves (
   user_id uuid unique references auth.users(id),
   nom text not null,
   prenom text not null,
+  email text unique, -- renseigné par l'admin, sert à créer le login (voir /admin/accounts)
   classe classe_eleve not null,
   serie serie_eleve not null,
   style_apprentissage text not null default '',

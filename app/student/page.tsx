@@ -6,8 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { getRepetiteur, AUJOURDHUI, CURRENT_STUDENT_ID } from "@/lib/mock";
+import { DefiDuMoment } from "@/components/student/defi-du-moment";
+import { AUJOURDHUI } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 // Entrée standard = arrivée en 2nde à la rentrée officielle (première quinzaine de septembre) — §2.1/§2.2.
 function messageOnboarding(classeEntree: string, dateEntree: string): string | null {
@@ -21,8 +23,10 @@ function messageOnboarding(classeEntree: string, dateEntree: string): string | n
 }
 
 export default function StudentTodayPage() {
-  const { getSeancesByEleve, getDevoirsByEleve, getMatiere, getBadgesByEleve, getObjectifsByEleve, getScoreMoyen, getEleve } = useStore();
-  const eleve = getEleve(CURRENT_STUDENT_ID)!;
+  const { getSeancesByEleve, getDevoirsByEleve, getMatiere, getBadgesByEleve, getObjectifsByEleve, getScoreMoyen, getEleve, getRepetiteur } = useStore();
+  const CURRENT_STUDENT_ID = useCurrentUser().id;
+  const eleve = getEleve(CURRENT_STUDENT_ID);
+  if (!eleve) return null;
   const messageEntree = messageOnboarding(eleve.classeEntree, eleve.dateEntree);
   const seances = getSeancesByEleve(CURRENT_STUDENT_ID);
   const prochaine = seances.find((s) => s.statut === "a_venir");
@@ -105,6 +109,8 @@ export default function StudentTodayPage() {
             )}
           </CardContent>
         </Card>
+
+        <DefiDuMoment />
       </div>
 
       <Card>

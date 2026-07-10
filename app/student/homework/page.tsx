@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { AUJOURDHUI, CURRENT_STUDENT_ID } from "@/lib/mock";
+import { AUJOURDHUI } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 export default function StudentHomeworkPage() {
   const { getDevoirsByEleve } = useStore();
-  const devoirs = getDevoirsByEleve(CURRENT_STUDENT_ID).sort((a, b) =>
+  const devoirs = getDevoirsByEleve(useCurrentUser().id).sort((a, b) =>
     a.assignation.dateEcheance.localeCompare(b.assignation.dateEcheance)
   );
 

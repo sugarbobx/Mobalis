@@ -1,6 +1,8 @@
--- MOBALIS — Row Level Security
--- Prérequis : supabase/schema.sql déjà appliqué.
--- À exécuter après schema.sql, avant toute connexion cliente réelle.
+-- MOBALIS — Row Level Security (migration 0002)
+-- Prérequis : 0001_initial_schema.sql déjà appliquée.
+-- Déjà appliquée en production — voir supabase/migrations/README.md.
+-- Inclut les correctifs de récursion infinie exercices<->assignations et
+-- assignations<->assignation_eleves, découverts en testant les inserts.
 
 -- ============================================================
 -- HELPERS (security definer : contournent RLS pour se résoudre eux-mêmes,
@@ -31,6 +33,61 @@ language sql security definer stable set search_path = public as $$
   select exists (
     select 1 from eleve_repetiteurs
     where eleve_id = target and repetiteur_id = current_repetiteur_id()
+  );
+$$;
+
+-- exercices <-> assignations <-> assignation_eleves cross-reference each
+-- other in the "select_parent"/"select_eleve" policies below. Without these
+-- security-definer breaks, Postgres detects infinite recursion evaluating
+-- them (found by actually running inserts against the seeded schema).
+create function is_exercice_assigned_to_eleve(target_exercice uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from assignations a
+    join assignation_eleves ae on ae.assignation_id = a.id
+    where a.exercice_id = target_exercice and ae.eleve_id = current_eleve_id()
+  );
+$$;
+
+create function is_exercice_assigned_to_parent(target_exercice uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from assignations a
+    join assignation_eleves ae on ae.assignation_id = a.id
+    where a.exercice_id = target_exercice and is_eleve_of_parent(ae.eleve_id)
+  );
+$$;
+
+create function is_assignation_non_diagnostic(target_assignation uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from assignations a
+    join exercices e on e.id = a.exercice_id
+    where a.id = target_assignation and e.type != 'diagnostic'
+  );
+$$;
+
+create function is_assignation_of_eleve(target_assignation uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from assignation_eleves ae
+    where ae.assignation_id = target_assignation and ae.eleve_id = current_eleve_id()
+  );
+$$;
+
+create function is_assignation_of_parent(target_assignation uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from assignation_eleves ae
+    where ae.assignation_id = target_assignation and is_eleve_of_parent(ae.eleve_id)
+  );
+$$;
+
+create function is_assignation_owned_by_repetiteur(target_assignation uuid) returns boolean
+language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from assignations a
+    where a.id = target_assignation and a.repetiteur_assignant_id = current_repetiteur_id()
   );
 $$;
 
@@ -195,17 +252,9 @@ create policy "exercices_repetiteur_select_bibliotheque" on exercices for select
   using (dans_bibliotheque = true and current_repetiteur_id() is not null);
 -- élève/parent : uniquement les exercices qui leur ont été effectivement assignés
 create policy "exercices_select_eleve" on exercices for select to authenticated
-  using (exists (
-    select 1 from assignations a
-    join assignation_eleves ae on ae.assignation_id = a.id
-    where a.exercice_id = exercices.id and ae.eleve_id = current_eleve_id()
-  ));
+  using (is_exercice_assigned_to_eleve(id));
 create policy "exercices_select_parent" on exercices for select to authenticated
-  using (type != 'diagnostic' and exists (
-    select 1 from assignations a
-    join assignation_eleves ae on ae.assignation_id = a.id
-    where a.exercice_id = exercices.id and is_eleve_of_parent(ae.eleve_id)
-  ));
+  using (type != 'diagnostic' and is_exercice_assigned_to_parent(id));
 
 -- ============================================================
 -- ASSIGNATIONS
@@ -216,19 +265,16 @@ create policy "assignations_repetiteur_all" on assignations for all to authentic
   using (repetiteur_assignant_id = current_repetiteur_id())
   with check (repetiteur_assignant_id = current_repetiteur_id());
 create policy "assignations_select_eleve" on assignations for select to authenticated
-  using (exists (select 1 from assignation_eleves ae where ae.assignation_id = assignations.id and ae.eleve_id = current_eleve_id()));
+  using (is_assignation_of_eleve(id));
 -- diagnostic exclu côté parent (§2.2/§3.3)
 create policy "assignations_select_parent" on assignations for select to authenticated
-  using (
-    exists (select 1 from assignation_eleves ae where ae.assignation_id = assignations.id and is_eleve_of_parent(ae.eleve_id))
-    and exists (select 1 from exercices e where e.id = assignations.exercice_id and e.type != 'diagnostic')
-  );
+  using (is_assignation_of_parent(id) and is_assignation_non_diagnostic(id));
 
 create policy "assignation_eleves_admin_all" on assignation_eleves for all to authenticated
   using (is_admin()) with check (is_admin());
 create policy "assignation_eleves_repetiteur_all" on assignation_eleves for all to authenticated
-  using (exists (select 1 from assignations a where a.id = assignation_id and a.repetiteur_assignant_id = current_repetiteur_id()))
-  with check (exists (select 1 from assignations a where a.id = assignation_id and a.repetiteur_assignant_id = current_repetiteur_id()));
+  using (is_assignation_owned_by_repetiteur(assignation_id))
+  with check (is_assignation_owned_by_repetiteur(assignation_id));
 create policy "assignation_eleves_select_eleve" on assignation_eleves for select to authenticated
   using (eleve_id = current_eleve_id());
 create policy "assignation_eleves_select_parent" on assignation_eleves for select to authenticated
@@ -240,20 +286,14 @@ create policy "assignation_eleves_select_parent" on assignation_eleves for selec
 create policy "soumissions_admin_all" on soumissions for all to authenticated
   using (is_admin()) with check (is_admin());
 create policy "soumissions_repetiteur_all" on soumissions for all to authenticated
-  using (exists (select 1 from assignations a where a.id = assignation_id and a.repetiteur_assignant_id = current_repetiteur_id()))
-  with check (exists (select 1 from assignations a where a.id = assignation_id and a.repetiteur_assignant_id = current_repetiteur_id()));
+  using (is_assignation_owned_by_repetiteur(assignation_id))
+  with check (is_assignation_owned_by_repetiteur(assignation_id));
 create policy "soumissions_eleve_select" on soumissions for select to authenticated
   using (eleve_id = current_eleve_id());
 create policy "soumissions_eleve_insert" on soumissions for insert to authenticated
   with check (eleve_id = current_eleve_id());
 create policy "soumissions_select_parent" on soumissions for select to authenticated
-  using (
-    is_eleve_of_parent(eleve_id)
-    and exists (
-      select 1 from assignations a join exercices e on e.id = a.exercice_id
-      where a.id = assignation_id and e.type != 'diagnostic'
-    )
-  );
+  using (is_eleve_of_parent(eleve_id) and is_assignation_non_diagnostic(assignation_id));
 
 -- ============================================================
 -- RESSOURCES (fiches/résumés/corrections partagées)

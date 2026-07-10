@@ -7,14 +7,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { CURRENT_STUDENT_ID } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 type Devoirs = ReturnType<ReturnType<typeof useStore>["getDevoirsByEleve"]>;
 
 export default function StudentExercisesPage() {
   const { getDevoirsByEleve } = useStore();
-  const devoirs = getDevoirsByEleve(CURRENT_STUDENT_ID);
+  const devoirs = getDevoirsByEleve(useCurrentUser().id);
   const aFaire = devoirs.filter((d) => d.assignation.statut === "a_faire");
   const enCours = devoirs.filter((d) => d.assignation.statut === "fait");
   const corriges = devoirs.filter((d) => d.assignation.statut === "corrige");

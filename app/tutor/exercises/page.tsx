@@ -29,15 +29,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { QcmBuilder, questionVide, questionsValides } from "@/components/shared/qcm-builder";
-import { getRepetiteur, CURRENT_TUTOR_ID } from "@/lib/mock";
-import type { Exercice, QuestionQCM, TypeExercice } from "@/lib/mock";
+import type { QuestionQCM, TypeExercice } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 const TYPE_LABELS: Record<TypeExercice, string> = { qcm: "QCM", libre: "Réponse libre", diagnostic: "Diagnostic (positionnement)" };
 
 export default function TutorExercisesPage() {
-  const tutor = getRepetiteur(CURRENT_TUTOR_ID)!;
-  const { exercices, assignations: toutesAssignations, getMatiere, getExercice, addExercice, addAssignation, getEleve } = useStore();
+  const { exercices, assignations: toutesAssignations, getMatiere, getExercice, addExercice, addAssignation, getEleve, getRepetiteur } = useStore();
+  const CURRENT_TUTOR_ID = useCurrentUser().id;
+  const tutor = getRepetiteur(CURRENT_TUTOR_ID) ?? { id: "", nom: "", prenom: "", matiereIds: [], eleveIds: [], avatarInitiales: "" };
   const assignations = toutesAssignations.filter((a) => a.repetiteurAssignantId === CURRENT_TUTOR_ID);
 
   const disponibles = exercices.filter(
@@ -53,10 +54,9 @@ export default function TutorExercisesPage() {
     setElevesChoisis((prev) => (prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]));
   }
 
-  function assigner() {
+  async function assigner() {
     if (!exerciceId || elevesChoisis.length === 0) return;
-    addAssignation({
-      id: `a-${Date.now()}`,
+    await addAssignation({
       exerciceId,
       eleveIds: elevesChoisis,
       repetiteurAssignantId: CURRENT_TUTOR_ID,
@@ -81,23 +81,22 @@ export default function TutorExercisesPage() {
 
   const formValide = titre.trim().length > 0 && !!matiereId && (type !== "qcm" || questionsValides(questions));
 
-  function creerExercice() {
+  async function creerExercice() {
     if (!formValide) return;
-    const nouveau: Exercice = {
-      id: `ex-${Date.now()}`,
+    const nouveau = {
       matiereId,
       type,
       titre: titre.trim(),
       consigne: consigne.trim() || "Consigne à préciser.",
-      createur: "repetiteur",
+      createur: "repetiteur" as const,
       createurId: CURRENT_TUTOR_ID,
       dansBibliotheque: partager,
       ...(type === "qcm"
         ? { questions: questions.map((q) => ({ ...q, question: q.question.trim(), choix: q.choix.map((c) => c.trim()) })) }
         : { enonce: enonce.trim() || "Énoncé à préciser." }),
     };
-    addExercice(nouveau);
-    setExerciceId(nouveau.id);
+    const created = await addExercice(nouveau);
+    setExerciceId(created.id);
     toast.success(
       partager
         ? `Exercice « ${nouveau.titre} » créé et partagé dans la bibliothèque`

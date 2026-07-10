@@ -27,12 +27,15 @@ import {
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CompteLectureSeule } from "@/components/shared/compte-lecture-seule";
-import { getRepetiteur, CURRENT_STUDENT_ID } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 export default function StudentMessagesPage() {
-  const { getMessagesByEleve, getMatiere, demandesAide, addMessage, addDemandeAide, getEleve } = useStore();
-  const eleve = getEleve(CURRENT_STUDENT_ID)!;
+  const { getMessagesByEleve, getMatiere, demandesAide, addMessage, addDemandeAide, getEleve, getRepetiteur } = useStore();
+  const CURRENT_STUDENT_ID = useCurrentUser().id;
+  const eleve =
+    getEleve(CURRENT_STUDENT_ID) ??
+    { id: "", nom: "", prenom: "", classe: "2nde" as const, serie: "C" as const, styleApprentissage: "", parentIds: [], repetiteurIds: [], matiereIds: [], avatarInitiales: "", dateEntree: "", classeEntree: "2nde" as const, statutCompte: "actif" as const };
   const lectureSeule = eleve.statutCompte === "diplome";
   const messages = getMessagesByEleve(CURRENT_STUDENT_ID);
   const demandes = demandesAide.filter((d) => d.eleveId === CURRENT_STUDENT_ID);
@@ -44,7 +47,6 @@ export default function StudentMessagesPage() {
   function envoyer(repetiteurId: string) {
     if (!saisie.trim() || lectureSeule) return;
     addMessage({
-      id: `m-${Date.now()}`,
       eleveId: CURRENT_STUDENT_ID,
       repetiteurId,
       auteur: "eleve",
@@ -58,7 +60,6 @@ export default function StudentMessagesPage() {
   function envoyerDemande() {
     if (!sujetAide.trim() || !matiereAide || lectureSeule) return;
     addDemandeAide({
-      id: `d-${Date.now()}`,
       eleveId: CURRENT_STUDENT_ID,
       matiereId: matiereAide,
       sujet: sujetAide.trim(),

@@ -45,6 +45,8 @@ export interface Parent {
   email: string;
   eleveIds: string[];
   preferencesNotification: PreferencesNotification;
+  /** null tant que le parent n'a pas accepté la politique de confidentialité (données de mineur). */
+  consentementAccepteAt: string | null;
 }
 
 export type StatutCompteEleve = "actif" | "diplome";
@@ -95,6 +97,8 @@ export interface Evaluation {
   remarque: string;
   visibleEleve: boolean;
   anneeScolaire: string;
+  /** null pour les évaluations antérieures au système de bulletin séquentiel. */
+  sequenceId: string | null;
 }
 
 export type StatutPaiement = "paye" | "en_attente" | "en_retard";

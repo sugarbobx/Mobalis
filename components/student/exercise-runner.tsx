@@ -11,14 +11,15 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { CompteLectureSeule } from "@/components/shared/compte-lecture-seule";
-import { CURRENT_STUDENT_ID } from "@/lib/mock";
 import type { QuestionQCM, TypeExercice } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 type Devoirs = ReturnType<ReturnType<typeof useStore>["getDevoirsByEleve"]>;
 
 export function ExerciseRunner({ assignationId }: { assignationId: string }) {
   const { getDevoirsByEleve, addSoumission, updateAssignation, getEleve } = useStore();
+  const CURRENT_STUDENT_ID = useCurrentUser().id;
   const devoir = getDevoirsByEleve(CURRENT_STUDENT_ID).find((d) => d.assignation.id === assignationId);
   const lectureSeule = getEleve(CURRENT_STUDENT_ID)?.statutCompte === "diplome";
 
@@ -49,7 +50,6 @@ export function ExerciseRunner({ assignationId }: { assignationId: string }) {
       const score = questions.length > 0 ? Math.round((bonnesReponses / questions.length) * 100) : 0;
       setScoreSimule(score);
       addSoumission({
-        id: `sub-${Date.now()}`,
         assignationId: assignation.id,
         eleveId: CURRENT_STUDENT_ID,
         reponseQcm: Object.values(reponses).map(Number),
@@ -61,7 +61,6 @@ export function ExerciseRunner({ assignationId }: { assignationId: string }) {
       updateAssignation(assignation.id, { statut: "corrige", score });
     } else {
       addSoumission({
-        id: `sub-${Date.now()}`,
         assignationId: assignation.id,
         eleveId: CURRENT_STUDENT_ID,
         reponseLibre,

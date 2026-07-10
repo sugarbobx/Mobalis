@@ -1,23 +1,37 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Award, FileText } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MiniLineChart } from "@/components/shared/mini-line-chart";
-import { getRepetiteur, CURRENT_STUDENT_ID } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
+import { BulletinDownloadButton } from "@/components/shared/bulletin-download-button";
+import { getSequences, type Sequence } from "@/lib/bulletin-sequentiel";
 
 export default function StudentGradesPage() {
-  const { getEvaluationsByMatiere, getMatiere, getObjectifsByEleve, getBadgesByEleve, getEleve, getBulletinsByEleve } = useStore();
-  const eleve = getEleve(CURRENT_STUDENT_ID)!;
+  const { getEvaluationsByMatiere, getMatiere, getObjectifsByEleve, getBadgesByEleve, getEleve, getBulletinsByEleve, getRepetiteur } = useStore();
+  const CURRENT_STUDENT_ID = useCurrentUser().id;
+  const eleve = getEleve(CURRENT_STUDENT_ID);
   const objectifs = getObjectifsByEleve(CURRENT_STUDENT_ID);
   const badges = getBadgesByEleve(CURRENT_STUDENT_ID);
   const bulletins = getBulletinsByEleve(CURRENT_STUDENT_ID);
-  const remarques = eleve.matiereIds
+  const remarques = (eleve?.matiereIds ?? [])
     .flatMap((id) => getEvaluationsByMatiere(CURRENT_STUDENT_ID, id))
     .filter((e) => e.visibleEleve && e.remarque)
     .sort((a, b) => b.date.localeCompare(a.date));
+  const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [sequenceId, setSequenceId] = useState<string | null>(null);
+  useEffect(() => {
+    void getSequences().then((s) => {
+      setSequences(s);
+      if (s.length > 0) setSequenceId(s[s.length - 1].id);
+    });
+  }, []);
+  if (!eleve) return null;
 
   return (
     <div className="space-y-6">
@@ -33,14 +47,38 @@ export default function StudentGradesPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {bulletins.map((b) => (
-              <div key={b.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3 text-sm">
+              <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 text-sm">
                 <div>
                   <p className="font-medium">Année {b.anneeScolaire}</p>
                   <p className="text-muted-foreground">{b.appreciationGenerale}</p>
                 </div>
-                <span className="text-lg font-semibold text-primary">{b.moyenneGenerale}/20</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-semibold text-primary">{b.moyenneGenerale}/20</span>
+                </div>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {sequences.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><FileText className="size-4" /> Bulletin par séquence</CardTitle>
+            <CardDescription>Bulletin détaillé (classement, coefficients) d&apos;une séquence donnée.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <Select
+              items={Object.fromEntries(sequences.map((s) => [s.id, s.libelle]))}
+              value={sequenceId ?? undefined}
+              onValueChange={(v) => v && setSequenceId(v)}
+            >
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {sequences.map((s) => <SelectItem key={s.id} value={s.id}>{s.libelle}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {sequenceId && <BulletinDownloadButton eleveId={CURRENT_STUDENT_ID} sequenceId={sequenceId} />}
           </CardContent>
         </Card>
       )}

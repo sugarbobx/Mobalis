@@ -16,15 +16,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CompteLectureSeule } from "@/components/shared/compte-lecture-seule";
-import { CURRENT_STUDENT_ID } from "@/lib/mock";
 import { useStore } from "@/lib/store";
+import { useCurrentUser } from "@/lib/current-user-context";
 
 const STYLES = ["Visuel", "Auditif", "Kinesthésique"];
 const STYLE_ITEMS = Object.fromEntries(STYLES.map((s) => [s, s]));
 
 export default function StudentProfilePage() {
   const { getMatieresActives, getMatiere, getSeancesByEleve, autoEvaluations, addAutoEvaluation, getEleve } = useStore();
-  const eleve = getEleve(CURRENT_STUDENT_ID)!;
+  const CURRENT_STUDENT_ID = useCurrentUser().id;
+  const eleve =
+    getEleve(CURRENT_STUDENT_ID) ??
+    { id: "", nom: "", prenom: "", classe: "2nde" as const, serie: "C" as const, styleApprentissage: "", parentIds: [], repetiteurIds: [], matiereIds: [], avatarInitiales: "", dateEntree: "", classeEntree: "2nde" as const, statutCompte: "actif" as const };
   const lectureSeule = eleve.statutCompte === "diplome";
   const matieresActives = getMatieresActives(eleve.serie);
 
@@ -47,7 +50,6 @@ export default function StudentProfilePage() {
       return;
     }
     addAutoEvaluation({
-      id: `ae-${Date.now()}`,
       eleveId: CURRENT_STUDENT_ID,
       seanceId,
       moment,

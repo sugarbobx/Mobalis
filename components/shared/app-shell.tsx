@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { OfflineBanner } from "@/components/shared/offline-banner";
 import type { Role } from "@/lib/mock";
 import { NAV_ITEMS, ROLE_LABELS } from "@/lib/nav-config";
 
@@ -98,6 +99,7 @@ export function AppShell({
             Espace {ROLE_LABELS[role].toLowerCase()}
           </span>
         </header>
+        <OfflineBanner />
         <div className="flex-1 space-y-6 p-4 md:p-8">{children}</div>
       </SidebarInset>
     </SidebarProvider>
