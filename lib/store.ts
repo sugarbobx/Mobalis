@@ -406,7 +406,10 @@ async function fetchAll() {
     supabase.from("seances").select("*"),
     supabase.from("evaluations").select("*"),
     supabase.from("paiements").select("*"),
-    supabase.from("exercices").select("*"),
+    // Exclut la banque QCM globale (centre_id IS NULL, migration 0022) : ces 5000+
+    // lignes n'ont ni dansBibliotheque ni questions jsonb (forme incompatible avec
+    // ce store) et ont leur propre accès dédié via lib/qcm-bank.ts.
+    supabase.from("exercices").select("*").not("centre_id", "is", null),
     supabase.from("assignations").select("*, assignation_eleves(eleve_id)"),
     supabase.from("soumissions").select("*"),
     supabase.from("ressources").select("*"),

@@ -44,6 +44,7 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { label: "Répétiteurs", href: "/admin/repetiteurs", icon: Users },
     { label: "Matières", href: "/admin/subjects", icon: BookOpen },
     { label: "Bibliothèque d'exercices", href: "/admin/exercises", icon: Library },
+    { label: "Banque QCM", href: "/admin/qcm-bank", icon: ListChecks },
     { label: "Fin d'année", href: "/admin/fin-annee", icon: GraduationCap },
     { label: "Défis — tour de contrôle", href: "/admin/challenges", icon: Swords },
     { label: "Notifications", href: "/admin/notifications", icon: Bell },
