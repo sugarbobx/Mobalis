@@ -30,6 +30,7 @@ import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
 import { createClient } from "@/utils/supabase/client";
 import { lundiDeLaSemaine } from "@/lib/defis";
+import { dateLocaleISO } from "@/lib/dates";
 import type { Classe } from "@/lib/mock";
 
 const CLASSE_APP_TO_DB: Record<Classe, string> = { "2nde": "2nde", "1ère": "1ere", Tle: "tle" };
@@ -95,7 +96,7 @@ export default function TutorChallengesPage() {
   const [matiereId, setMatiereId] = useState("");
   const [classe, setClasse] = useState<Classe | "">("");
   const [nbQuestions, setNbQuestions] = useState("10");
-  const [dateDebut, setDateDebut] = useState(lundiDeLaSemaine(new Date()).toISOString().slice(0, 10));
+  const [dateDebut, setDateDebut] = useState(dateLocaleISO(lundiDeLaSemaine(new Date())));
   const [envoi, setEnvoi] = useState(false);
 
   useEffect(() => {
@@ -122,7 +123,7 @@ export default function TutorChallengesPage() {
       classe: CLASSE_APP_TO_DB[classe],
       nb_questions: nbDemande,
       date_debut: dateDebut,
-      date_fin: fin.toISOString().slice(0, 10),
+      date_fin: dateLocaleISO(fin),
       created_by: tutorId,
     });
     setEnvoi(false);

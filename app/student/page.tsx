@@ -7,7 +7,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { DefiDuMoment } from "@/components/student/defi-du-moment";
-import { AUJOURDHUI } from "@/lib/mock";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
 
@@ -28,6 +27,7 @@ export default function StudentTodayPage() {
   const eleve = getEleve(CURRENT_STUDENT_ID);
   if (!eleve) return null;
   const messageEntree = messageOnboarding(eleve.classeEntree, eleve.dateEntree);
+  const aujourdHui = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   const seances = getSeancesByEleve(CURRENT_STUDENT_ID);
   const prochaine = seances.find((s) => s.statut === "a_venir");
   const devoirs = getDevoirsByEleve(CURRENT_STUDENT_ID);
@@ -52,7 +52,7 @@ export default function StudentTodayPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Bonjour {eleve.prenom}</h1>
-        <p className="text-sm text-muted-foreground">Voici ton point du jour — {AUJOURDHUI}.</p>
+        <p className="text-sm text-muted-foreground">Voici ton point du jour — {aujourdHui}.</p>
       </div>
 
       {messageEntree && (

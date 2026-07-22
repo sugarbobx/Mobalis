@@ -63,6 +63,7 @@ export default function TutorExercisesPage() {
       dateAssignation: "2026-07-05",
       dateEcheance: echeance,
       statut: "a_faire",
+      eleveStatuts: {},
     });
     const noms = elevesChoisis.map((id) => getEleve(id)?.prenom).filter(Boolean).join(", ");
     toast.success(`« ${getExercice(exerciceId)?.titre} » assigné à ${noms}`);

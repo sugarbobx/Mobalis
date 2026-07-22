@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/shared/app-shell";
 import { createClient } from "@/utils/supabase/server";
 import { CurrentUserProvider } from "@/lib/current-user-context";
+import { BadgeEvaluator } from "@/components/student/badge-evaluator";
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -13,6 +14,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   return (
     <CurrentUserProvider value={eleve ?? { id: "", nom: "", prenom: "" }}>
+      {eleve && <BadgeEvaluator eleveId={eleve.id} />}
       <AppShell
         role="student"
         userLabel={eleve ? `${eleve.prenom} ${eleve.nom}` : ""}

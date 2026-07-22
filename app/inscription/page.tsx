@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/utils/supabase/client";
-import { creerCentre } from "./actions";
 
 export default function InscriptionPage() {
   const [nomCentre, setNomCentre] = useState("");
@@ -31,11 +30,23 @@ export default function InscriptionPage() {
     setErreur(null);
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      // centre + admin ne sont créés qu'à la confirmation réelle de l'email
+      // (trigger DB, migration 0028) — l'intention est juste déposée ici,
+      // dans les métadonnées du compte auth encore non confirmé.
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            pending_centre_nom: nomCentre.trim(),
+            pending_centre_ville: ville.trim(),
+            pending_admin_nom: nom.trim(),
+            pending_admin_prenom: prenom.trim(),
+          },
+        },
+      });
       if (error) throw error;
       if (!data.user) throw new Error("Compte non créé — réessaie.");
-
-      await creerCentre(nomCentre, ville, data.user.id, email, nom, prenom);
       setSucces(true);
     } catch (err) {
       setErreur(err instanceof Error ? err.message : "Échec de l'inscription.");
@@ -50,7 +61,7 @@ export default function InscriptionPage() {
         <MailCheck className="mb-4 size-12 text-primary" />
         <h1 className="text-xl font-semibold">Vérifie ta boîte mail</h1>
         <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          Ton centre « {nomCentre} » a été créé. Confirme ton adresse email pour activer ton compte, puis connecte-toi.
+          Confirme ton adresse email pour créer le centre « {nomCentre} » et activer ton compte, puis connecte-toi.
         </p>
         <Link href="/login" className="mt-6 text-sm text-primary underline-offset-4 hover:underline">
           Aller à la connexion

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { Award, CalendarCheck, Trophy, Flame, TrendingUp, Rocket, Zap, Crown, Star, FileText, type LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +12,7 @@ import { cn } from "@/lib/utils";
 const BADGE_ICONS: Record<string, LucideIcon> = { CalendarCheck, Trophy, Flame, TrendingUp, Rocket, Zap, Crown, Star, Award };
 
 export default function StudentGradesPage() {
-  const { getEvaluationsByMatiere, getMatiere, getObjectifsByEleve, getBadgesByEleve, getEleve, getBulletinsByEleve, getRepetiteur, badges: badgesCatalogue, evaluerBadges } = useStore();
+  const { getEvaluationsByMatiere, getMatiere, getObjectifsByEleve, getBadgesByEleve, getEleve, getBulletinsByEleve, getRepetiteur, badges: badgesCatalogue } = useStore();
   const CURRENT_STUDENT_ID = useCurrentUser().id;
   const eleve = getEleve(CURRENT_STUDENT_ID);
   const objectifs = getObjectifsByEleve(CURRENT_STUDENT_ID);
@@ -23,11 +22,6 @@ export default function StudentGradesPage() {
     .flatMap((id) => getEvaluationsByMatiere(CURRENT_STUDENT_ID, id))
     .filter((e) => e.visibleEleve && e.remarque)
     .sort((a, b) => b.date.localeCompare(a.date));
-
-  useEffect(() => {
-    if (CURRENT_STUDENT_ID) void evaluerBadges(CURRENT_STUDENT_ID);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [CURRENT_STUDENT_ID]);
 
   if (!eleve) return null;
 

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useStore } from "@/lib/store";
-import type { Classe, Serie } from "@/lib/mock";
+import type { Classe, Serie, Matiere } from "@/lib/mock";
 
 const PAR_PAGE = 20;
 const CLASSES: Classe[] = ["2nde", "1ère", "Tle"];
@@ -150,7 +150,18 @@ export default function AdminElevesPage() {
           {eleveOuvert && (
             <MatieresDialogContent
               eleve={eleveOuvert}
-              matieresActives={getMatieresActives(eleveOuvert.serie)}
+              matieresActives={[
+                ...getMatieresActives(eleveOuvert.serie),
+                // Une matière désactivée APRÈS affectation à cet élève doit
+                // rester visible ici pour pouvoir être retirée — sinon la
+                // ligne eleve_matieres devient invisible et impossible à
+                // détacher depuis ce dialogue (audit, bug secondaire).
+                ...eleveOuvert.matiereIds
+                  .filter((id) => !getMatieresActives(eleveOuvert.serie).some((m) => m.id === id))
+                  .map((id) => getMatiere(id))
+                  .filter((m): m is Matiere => !!m)
+                  .map((m) => ({ id: m.id, nom: `${m.nom} (désactivée)` })),
+              ]}
               onToggle={async (matiereId, assigner) => {
                 try {
                   await assignerMatiereEleve(eleveOuvert.id, matiereId, assigner);

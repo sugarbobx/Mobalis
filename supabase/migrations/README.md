@@ -39,9 +39,12 @@ fichier**.
 
 **Self-service (recommandé, depuis 0009+ front-end)** : le directeur du
 centre va sur `/inscription`, remplit le formulaire — centre, ville, son
-identité, email/mot de passe. `centres` + `admins` sont créés automatiquement
-(`app/inscription/actions.ts`), confirmation email requise puis connexion
-via `/login`. Aucune intervention manuelle nécessaire.
+identité, email/mot de passe. L'intention est déposée dans les métadonnées
+du compte auth au moment du `signUp()` ; `centres` + `admins` ne sont créés
+qu'à la confirmation réelle de l'email, via un trigger DB sur `auth.users`
+(migration 0028) — jamais avant, pour empêcher qu'un centre se retrouve lié
+à l'adresse email de quelqu'un d'autre. Connexion via `/login` ensuite.
+Aucune intervention manuelle nécessaire.
 
 **Procédure manuelle (fallback)** :
 1. SQL Editor :

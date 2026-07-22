@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ export function CreateAccountButton({
   const [email, setEmail] = useState(emailInitial ?? "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [motDePasseVisible, setMotDePasseVisible] = useState(false);
 
   async function handleSubmit() {
     if (!email.trim() || !password.trim()) return;
@@ -74,7 +75,15 @@ export function CreateAccountButton({
           <div className="space-y-1.5">
             <Label htmlFor="password">Mot de passe</Label>
             <div className="flex gap-2">
-              <Input id="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input
+                id="password"
+                type={motDePasseVisible ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <Button type="button" variant="outline" size="icon" onClick={() => setMotDePasseVisible((v) => !v)}>
+                {motDePasseVisible ? <EyeOff /> : <Eye />}
+              </Button>
               <Button type="button" variant="secondary" size="sm" onClick={() => setPassword(genererMotDePasse())}>
                 Générer
               </Button>

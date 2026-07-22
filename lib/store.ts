@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { dateLocaleISO } from "./dates";
 import type {
   Matiere,
   Repetiteur,
@@ -13,6 +14,7 @@ import type {
   Paiement,
   Exercice,
   Assignation,
+  StatutAssignation,
   Soumission,
   Ressource,
   Message,
@@ -258,16 +260,40 @@ const mapExercice = (r: Row): Exercice => ({
   dansBibliotheque: r.dans_bibliotheque,
 });
 
-const mapAssignation = (r: Row): Assignation => ({
-  id: r.id,
-  exerciceId: r.exercice_id,
-  eleveIds: (r.assignation_eleves ?? []).map((x: Row) => x.eleve_id),
-  repetiteurAssignantId: r.repetiteur_assignant_id,
-  dateAssignation: r.date_assignation,
-  dateEcheance: r.date_echeance,
-  statut: r.statut,
-  score: r.score ?? undefined,
-});
+const STATUT_RANG: Record<StatutAssignation, number> = { a_faire: 0, fait: 1, corrige: 2 };
+
+// Agrège les statuts/scores individuels (assignation_eleves) d'un groupe en
+// un statut "pire cas" + score moyen — jamais la vérité pour un élève donné
+// (voir getDevoirsByEleve), juste un aperçu groupé pour les vues admin/tuteur.
+function agregerStatuts(eleveStatuts: Record<string, { statut: StatutAssignation; score?: number }>): {
+  statut: StatutAssignation;
+  score?: number;
+} {
+  const membres = Object.values(eleveStatuts);
+  if (membres.length === 0) return { statut: "a_faire", score: undefined };
+  const statut = membres.map((m) => m.statut).reduce((pire, s) => (STATUT_RANG[s] < STATUT_RANG[pire] ? s : pire));
+  const scores = membres.map((m) => m.score).filter((s): s is number => typeof s === "number");
+  const score = scores.length === membres.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : undefined;
+  return { statut, score };
+}
+
+const mapAssignation = (r: Row): Assignation => {
+  const membres: Row[] = r.assignation_eleves ?? [];
+  const eleveStatuts: Record<string, { statut: StatutAssignation; score?: number }> = {};
+  for (const m of membres) {
+    eleveStatuts[m.eleve_id as string] = { statut: (m.statut ?? "a_faire") as StatutAssignation, score: m.score ?? undefined };
+  }
+  return {
+    id: r.id,
+    exerciceId: r.exercice_id,
+    eleveIds: membres.map((x) => x.eleve_id as string),
+    repetiteurAssignantId: r.repetiteur_assignant_id,
+    dateAssignation: r.date_assignation,
+    dateEcheance: r.date_echeance,
+    eleveStatuts,
+    ...agregerStatuts(eleveStatuts),
+  };
+};
 
 const mapSoumission = (r: Row): Soumission => ({
   id: r.id,
@@ -369,11 +395,23 @@ const mapResultatBac = (r: Row): ResultatBac => ({
   mention: r.mention ?? undefined,
 });
 
-// Fetched once per page load.
+// Fetched once per page load — mais retenté si la tentative précédente a
+// échoué (hors ligne, coupure réseau) : sans ça, `fetchAttempted` restait
+// vrai pour toujours après un seul échec, et rien ne redonnait jamais de
+// données fraîches avant un rechargement complet de page.
 let fetchAttempted = false;
 async function fetchAll() {
   if (fetchAttempted) return;
   fetchAttempted = true;
+  try {
+    await fetchAllOnce();
+  } catch (err) {
+    fetchAttempted = false;
+    throw err;
+  }
+}
+
+async function fetchAllOnce() {
   const supabase = requireOnlineClient();
 
   const [
@@ -409,8 +447,12 @@ async function fetchAll() {
     // Exclut la banque QCM globale (centre_id IS NULL, migration 0022) : ces 5000+
     // lignes n'ont ni dansBibliotheque ni questions jsonb (forme incompatible avec
     // ce store) et ont leur propre accès dédié via lib/qcm-bank.ts.
-    supabase.from("exercices").select("*").not("centre_id", "is", null),
-    supabase.from("assignations").select("*, assignation_eleves(eleve_id)"),
+    // Vue exercices_client (migration 0027), pas la table brute : elle masque
+    // bonneReponseIndex à l'élève/parent tant que l'élève concerné n'a pas
+    // soumis — un select direct sur `exercices` exposerait la bonne réponse
+    // dans la réponse réseau avant même que l'élève ait répondu.
+    supabase.from("exercices_client").select("*").not("centre_id", "is", null),
+    supabase.from("assignations").select("*, assignation_eleves(eleve_id, statut, score)"),
     supabase.from("soumissions").select("*"),
     supabase.from("ressources").select("*"),
     supabase.from("messages").select("*"),
@@ -481,8 +523,11 @@ export function useStore() {
       .filter((a) => a.eleveIds.includes(eleveId))
       .map((assignation) => {
         const exercice = getExercice(assignation.exerciceId)!;
+        // Statut/score PERSONNELS de cet élève, jamais l'agrégat du groupe
+        // porté par `assignation` elle-même (voir Assignation.eleveStatuts).
+        const perso = assignation.eleveStatuts[eleveId] ?? { statut: assignation.statut, score: assignation.score };
         return {
-          assignation,
+          assignation: { ...assignation, statut: perso.statut, score: perso.score },
           exercice,
           matiere: getMatiere(exercice.matiereId)!,
           soumission: getSoumissionByAssignation(assignation.id, eleveId),
@@ -541,7 +586,11 @@ export function useStore() {
     getPassageByEleve: (eleveId: string, anneeScolaire: string) =>
       state.passagesClasse.find((p) => p.eleveId === eleveId && p.anneeScolaire === anneeScolaire),
     getSuggestionsByEleve: (eleveId: string) => state.suggestionsReorientation.filter((s) => s.eleveId === eleveId),
-    getResultatBacByEleve: (eleveId: string) => state.resultatsBac.find((r) => r.eleveId === eleveId),
+    // Un élève peut redoubler et repasser le Bac l'année suivante — le
+    // résultat de CETTE année scolaire, jamais "le premier trouvé" (audit
+    // item #15, resultats_bac n'est plus unique par élève seul).
+    getResultatBacByEleve: (eleveId: string, anneeScolaire: string) =>
+      state.resultatsBac.find((r) => r.eleveId === eleveId && r.anneeScolaire === anneeScolaire),
     getMoyennesParMatiere: (eleveId: string, anneeScolaire: string) => {
       const eleve = state.eleves.find((e) => e.id === eleveId);
       if (!eleve) return [];
@@ -563,8 +612,11 @@ export function useStore() {
       if (!current) return;
       const statut = current.statut === "actif" ? "inactif" : "actif";
       const supabase = requireOnlineClient();
-      const { error } = await supabase.from("matieres").update({ statut }).eq("id", id);
-      if (error) return;
+      // .select() force le retour des lignes réellement modifiées : sans ça,
+      // un update filtré à 0 ligne par RLS renvoie error:null et l'état
+      // local se met à jour comme si ça avait marché (audit item #11).
+      const { data, error } = await supabase.from("matieres").update({ statut }).eq("id", id).select("id");
+      if (error || !data?.length) return;
       store.setState((prev) => ({ ...prev, matieres: prev.matieres.map((m) => (m.id === id ? { ...m, statut } : m)) }));
     },
     addMatiere: async (matiere: Omit<Matiere, "id">) => {
@@ -620,22 +672,62 @@ export function useStore() {
           .insert(assignation.eleveIds.map((eleveId) => ({ assignation_id: data.id, eleve_id: eleveId })));
         if (joinError) throw joinError;
       }
-      const created: Assignation = { ...mapAssignation(data), eleveIds: assignation.eleveIds };
+      const eleveStatuts = Object.fromEntries(
+        assignation.eleveIds.map((eleveId) => [eleveId, { statut: "a_faire" as const, score: undefined }])
+      );
+      const created: Assignation = {
+        ...mapAssignation(data),
+        eleveIds: assignation.eleveIds,
+        eleveStatuts,
+        ...agregerStatuts(eleveStatuts),
+      };
       store.setState((prev) => ({ ...prev, assignations: [created, ...prev.assignations] }));
       return created;
     },
-    updateAssignation: async (id: string, patch: Partial<Assignation>) => {
+    // Patch les champs de GROUPE de l'assignation (échéance, exercice...) —
+    // jamais statut/score, qui sont désormais par élève : voir
+    // updateAssignationEleve ci-dessous (audit item #8, migration 0027).
+    updateAssignation: async (id: string, patch: Omit<Partial<Assignation>, "statut" | "score" | "eleveStatuts">) => {
       const supabase = requireOnlineClient();
       const payload: Row = {};
       if (patch.exerciceId !== undefined) payload.exercice_id = patch.exerciceId;
       if (patch.repetiteurAssignantId !== undefined) payload.repetiteur_assignant_id = patch.repetiteurAssignantId;
       if (patch.dateAssignation !== undefined) payload.date_assignation = patch.dateAssignation;
       if (patch.dateEcheance !== undefined) payload.date_echeance = patch.dateEcheance;
+      const { data, error } = await supabase.from("assignations").update(payload).eq("id", id).select("id");
+      if (error || !data?.length) return;
+      store.setState((prev) => ({ ...prev, assignations: prev.assignations.map((a) => (a.id === id ? { ...a, ...patch } : a)) }));
+    },
+    // Statut/score d'UN élève au sein d'une assignation de groupe (RLS :
+    // répétiteur propriétaire de l'assignation, ou l'élève via le RPC
+    // soumettre_exercice — jamais un update client direct côté élève).
+    updateAssignationEleve: async (
+      assignationId: string,
+      eleveId: string,
+      patch: { statut?: StatutAssignation; score?: number }
+    ) => {
+      const supabase = requireOnlineClient();
+      const payload: Row = {};
       if (patch.statut !== undefined) payload.statut = patch.statut;
       if (patch.score !== undefined) payload.score = patch.score;
-      const { error } = await supabase.from("assignations").update(payload).eq("id", id);
-      if (error) return;
-      store.setState((prev) => ({ ...prev, assignations: prev.assignations.map((a) => (a.id === id ? { ...a, ...patch } : a)) }));
+      const { data, error } = await supabase
+        .from("assignation_eleves")
+        .update(payload)
+        .eq("assignation_id", assignationId)
+        .eq("eleve_id", eleveId)
+        .select("eleve_id");
+      if (error || !data?.length) return;
+      store.setState((prev) => ({
+        ...prev,
+        assignations: prev.assignations.map((a) => {
+          if (a.id !== assignationId) return a;
+          const eleveStatuts = {
+            ...a.eleveStatuts,
+            [eleveId]: { ...a.eleveStatuts[eleveId], ...patch },
+          };
+          return { ...a, eleveStatuts, ...agregerStatuts(eleveStatuts) };
+        }),
+      }));
     },
 
     addSoumission: async (soumission: Omit<Soumission, "id">) => {
@@ -669,8 +761,8 @@ export function useStore() {
       if (patch.scoreAuto !== undefined) payload.score_auto = patch.scoreAuto;
       if (patch.scoreFinal !== undefined) payload.score_final = patch.scoreFinal;
       if (patch.commentaireCorrection !== undefined) payload.commentaire_correction = patch.commentaireCorrection;
-      const { error } = await supabase.from("soumissions").update(payload).eq("id", id);
-      if (error) return;
+      const { data, error } = await supabase.from("soumissions").update(payload).eq("id", id).select("id");
+      if (error || !data?.length) return;
       store.setState((prev) => ({ ...prev, soumissions: prev.soumissions.map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
     },
 
@@ -684,8 +776,8 @@ export function useStore() {
       if (patch.statut !== undefined) payload.statut = patch.statut;
       if (patch.contenu !== undefined) payload.contenu = patch.contenu;
       if (patch.present !== undefined) payload.present = patch.present;
-      const { error } = await supabase.from("seances").update(payload).eq("id", id);
-      if (error) return;
+      const { data, error } = await supabase.from("seances").update(payload).eq("id", id).select("id");
+      if (error || !data?.length) return;
       store.setState((prev) => ({ ...prev, seances: prev.seances.map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
     },
 
@@ -731,6 +823,20 @@ export function useStore() {
       store.setState((prev) => ({ ...prev, messages: [...prev.messages, created] }));
       return created;
     },
+    // Marque un lot de messages comme lus (audit item secondaire : `lu`
+    // n'était jamais remis à jour après insertion, l'indicateur non-lu
+    // restait structurellement vrai pour toujours).
+    marquerMessagesLus: async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const supabase = requireOnlineClient();
+      const { data, error } = await supabase.from("messages").update({ lu: true }).in("id", ids).select("id");
+      if (error || !data?.length) return;
+      const luIds = new Set(data.map((r) => r.id as string));
+      store.setState((prev) => ({
+        ...prev,
+        messages: prev.messages.map((m) => (luIds.has(m.id) ? { ...m, lu: true } : m)),
+      }));
+    },
 
     addDemandeAide: async (demande: Omit<DemandeAide, "id">) => {
       const supabase = requireOnlineClient();
@@ -749,6 +855,17 @@ export function useStore() {
       const created = mapDemandeAide(data);
       store.setState((prev) => ({ ...prev, demandesAide: [created, ...prev.demandesAide] }));
       return created;
+    },
+    updateDemandeAide: async (id: string, patch: Partial<DemandeAide>) => {
+      const supabase = requireOnlineClient();
+      const payload: Row = {};
+      if (patch.statut !== undefined) payload.statut = patch.statut;
+      const { data, error } = await supabase.from("demandes_aide").update(payload).eq("id", id).select("id");
+      if (error || !data?.length) return;
+      store.setState((prev) => ({
+        ...prev,
+        demandesAide: prev.demandesAide.map((d) => (d.id === id ? { ...d, ...patch } : d)),
+      }));
     },
 
     addAutoEvaluation: async (autoEvaluation: Omit<AutoEvaluation, "id">) => {
@@ -809,8 +926,8 @@ export function useStore() {
       if (patch.remarques !== undefined) payload.pref_notif_remarques = patch.remarques;
       if (patch.paiements !== undefined) payload.pref_notif_paiements = patch.paiements;
       if (patch.frequence !== undefined) payload.pref_notif_frequence = patch.frequence;
-      const { error } = await supabase.from("parents").update(payload).eq("id", parentId);
-      if (error) return;
+      const { data, error } = await supabase.from("parents").update(payload).eq("id", parentId).select("id");
+      if (error || !data?.length) return;
       store.setState((prev) => ({
         ...prev,
         parents: prev.parents.map((p) =>
@@ -821,8 +938,13 @@ export function useStore() {
     accepterConsentement: async (parentId: string) => {
       const supabase = requireOnlineClient();
       const acceptedAt = new Date().toISOString();
-      const { error } = await supabase.from("parents").update({ consentement_accepte_at: acceptedAt }).eq("id", parentId);
+      const { data, error } = await supabase
+        .from("parents")
+        .update({ consentement_accepte_at: acceptedAt })
+        .eq("id", parentId)
+        .select("id");
       if (error) throw error;
+      if (!data?.length) throw new Error("Mise à jour refusée.");
       store.setState((prev) => ({
         ...prev,
         parents: prev.parents.map((p) => (p.id === parentId ? { ...p, consentementAccepteAt: acceptedAt } : p)),
@@ -839,8 +961,8 @@ export function useStore() {
       if (patch.classeEntree !== undefined) payload.classe_entree = CLASSE_APP_TO_DB[patch.classeEntree];
       if (patch.historiqueExterne !== undefined) payload.historique_externe = patch.historiqueExterne;
       if (patch.statutCompte !== undefined) payload.statut_compte = patch.statutCompte;
-      const { error } = await supabase.from("eleves").update(payload).eq("id", id);
-      if (error) return;
+      const { data, error } = await supabase.from("eleves").update(payload).eq("id", id).select("id");
+      if (error || !data?.length) return;
       store.setState((prev) => ({ ...prev, eleves: prev.eleves.map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
     },
     assignerMatiereEleve: async (eleveId: string, matiereId: string, assigner: boolean) => {
@@ -867,7 +989,7 @@ export function useStore() {
       if (error || !data) return [] as string[];
       const nouveauxCodes = data as string[];
       if (nouveauxCodes.length === 0) return [];
-      const aujourdHui = new Date().toISOString().slice(0, 10);
+      const aujourdHui = dateLocaleISO(new Date());
       store.setState((prev) => {
         const nouveauxBadges = prev.badges
           .filter((b) => nouveauxCodes.includes(b.code))
@@ -924,13 +1046,18 @@ export function useStore() {
       const passage = state.passagesClasse.find((p) => p.id === id);
       if (!passage) return;
       const supabase = requireOnlineClient();
-      const { error: passageError } = await supabase.from("passages_classe").update({ statut: "valide" }).eq("id", id);
-      if (passageError) return;
-      const { error: eleveError } = await supabase
+      const { data: passageData, error: passageError } = await supabase
+        .from("passages_classe")
+        .update({ statut: "valide" })
+        .eq("id", id)
+        .select("id");
+      if (passageError || !passageData?.length) return;
+      const { data: eleveData, error: eleveError } = await supabase
         .from("eleves")
         .update({ classe: CLASSE_APP_TO_DB[passage.classeSuivante] })
-        .eq("id", passage.eleveId);
-      if (eleveError) return;
+        .eq("id", passage.eleveId)
+        .select("id");
+      if (eleveError || !eleveData?.length) return;
       store.setState((prev) => ({
         ...prev,
         passagesClasse: prev.passagesClasse.map((p) => (p.id === id ? { ...p, statut: "valide" } : p)),
@@ -958,8 +1085,12 @@ export function useStore() {
     },
     transmettreSuggestion: async (id: string) => {
       const supabase = requireOnlineClient();
-      const { error } = await supabase.from("suggestions_reorientation").update({ transmise_au_parent: true }).eq("id", id);
-      if (error) return;
+      const { data, error } = await supabase
+        .from("suggestions_reorientation")
+        .update({ transmise_au_parent: true })
+        .eq("id", id)
+        .select("id");
+      if (error || !data?.length) return;
       store.setState((prev) => ({
         ...prev,
         suggestionsReorientation: prev.suggestionsReorientation.map((s) => (s.id === id ? { ...s, transmiseAuParent: true } : s)),
@@ -967,8 +1098,8 @@ export function useStore() {
     },
     appliquerReorientation: async (eleveId: string, serie: Serie) => {
       const supabase = requireOnlineClient();
-      const { error } = await supabase.from("eleves").update({ serie }).eq("id", eleveId);
-      if (error) return;
+      const { data, error } = await supabase.from("eleves").update({ serie }).eq("id", eleveId).select("id");
+      if (error || !data?.length) return;
       store.setState((prev) => ({ ...prev, eleves: prev.eleves.map((e) => (e.id === eleveId ? { ...e, serie } : e)) }));
     },
 
@@ -986,8 +1117,8 @@ export function useStore() {
     },
     marquerDiplome: async (eleveId: string) => {
       const supabase = requireOnlineClient();
-      const { error } = await supabase.from("eleves").update({ statut_compte: "diplome" }).eq("id", eleveId);
-      if (error) return;
+      const { data, error } = await supabase.from("eleves").update({ statut_compte: "diplome" }).eq("id", eleveId).select("id");
+      if (error || !data?.length) return;
       store.setState((prev) => ({ ...prev, eleves: prev.eleves.map((e) => (e.id === eleveId ? { ...e, statutCompte: "diplome" } : e)) }));
     },
   };

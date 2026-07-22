@@ -7,15 +7,16 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
-import { AUJOURDHUI } from "@/lib/mock";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
+import { dateLocaleISO } from "@/lib/dates";
 
 export default function StudentHomeworkPage() {
   const { getDevoirsByEleve } = useStore();
   const devoirs = getDevoirsByEleve(useCurrentUser().id).sort((a, b) =>
     a.assignation.dateEcheance.localeCompare(b.assignation.dateEcheance)
   );
+  const aujourdHui = dateLocaleISO(new Date());
 
   return (
     <div className="space-y-6">
@@ -37,7 +38,7 @@ export default function StudentHomeworkPage() {
       ) : (
       <div className="space-y-2">
         {devoirs.map((d) => {
-          const enRetard = d.assignation.statut === "a_faire" && d.assignation.dateEcheance < AUJOURDHUI;
+          const enRetard = d.assignation.statut === "a_faire" && d.assignation.dateEcheance < aujourdHui;
           return (
             <Card key={d.assignation.id}>
               <CardContent className="flex flex-wrap items-center justify-between gap-3">

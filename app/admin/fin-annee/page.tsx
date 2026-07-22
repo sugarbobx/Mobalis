@@ -289,7 +289,7 @@ export default function AdminFinAnneePage() {
               </TableHeader>
               <TableBody>
                 {elevesActifs.filter((e) => e.classe === "Tle").map((eleve) => {
-                  const resultat = getResultatBacByEleve(eleve.id);
+                  const resultat = getResultatBacByEleve(eleve.id, ANNEE_SCOLAIRE);
                   return (
                     <TableRow key={eleve.id}>
                       <TableCell className="font-medium">{eleve.prenom} {eleve.nom}</TableCell>
@@ -307,8 +307,15 @@ export default function AdminFinAnneePage() {
                           disabled={!!resultat}
                           onSubmit={(obtenu, mention) => {
                             addResultatBac({ eleveId: eleve.id, anneeScolaire: ANNEE_SCOLAIRE, obtenu, mention });
-                            marquerDiplome(eleve.id);
-                            toast.success(`${eleve.prenom} ${eleve.nom} marqué diplômé — compte en lecture seule.`);
+                            if (obtenu) {
+                              marquerDiplome(eleve.id);
+                              toast.success(`${eleve.prenom} ${eleve.nom} marqué diplômé — compte en lecture seule.`);
+                            } else {
+                              // Reste en Tle, compte actif — redouble et pourra repasser le
+                              // Bac l'an prochain (audit item #15, resultats_bac accepte
+                              // désormais plusieurs années par élève).
+                              toast.success(`${eleve.prenom} ${eleve.nom} redouble la Terminale — compte inchangé.`);
+                            }
                           }}
                         />
                       </TableCell>

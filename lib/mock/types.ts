@@ -146,8 +146,14 @@ export interface Assignation {
   repetiteurAssignantId: string;
   dateAssignation: string;
   dateEcheance: string;
+  /** Agrégat du groupe (pire statut parmi les élèves) — pour un devoir
+      individuel, un aperçu admin/tuteur groupé. Jamais la source de vérité
+      pour un élève donné : voir eleveStatuts + getDevoirsByEleve(). */
   statut: StatutAssignation;
   score?: number;
+  /** Statut/score réels, par élève (assignation_eleves) — une même
+      assignation groupée n'a plus un état partagé entre tous ses élèves. */
+  eleveStatuts: Record<string, { statut: StatutAssignation; score?: number }>;
 }
 
 export type StatutSoumission = "auto_corrige" | "en_attente_correction" | "corrige_manuellement";

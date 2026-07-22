@@ -25,6 +25,7 @@ import {
   type DefiEleve,
   type LigneClassement,
 } from "@/lib/defis";
+import { dateLocaleISO } from "@/lib/dates";
 
 const MEDAILLES = ["🥇", "🥈", "🥉"];
 
@@ -55,7 +56,7 @@ export default function StudentChallengesPage() {
     );
   }
 
-  const aujourdHui = new Date().toISOString().slice(0, 10);
+  const aujourdHui = dateLocaleISO(new Date());
   const jouables = (d: DefiEleve) =>
     d.statut === "en_cours" || (d.statut === "a_jouer" && d.dateDebut <= aujourdHui && aujourdHui <= d.dateFin);
 
@@ -164,12 +165,12 @@ function Classements() {
     d.setDate(d.getDate() - i * 7);
     return d;
   });
-  const [semaineIso, setSemaineIso] = useState(semaines[0].toISOString().slice(0, 10));
+  const [semaineIso, setSemaineIso] = useState(dateLocaleISO(semaines[0]));
   const [onglet, setOnglet] = useState("classe");
   const semaine = new Date(`${semaineIso}T00:00:00`);
 
   const items = Object.fromEntries(
-    semaines.map((s, i) => [s.toISOString().slice(0, 10), i === 0 ? "Cette semaine" : `Semaine du ${formatSemaine(s)}`])
+    semaines.map((s, i) => [dateLocaleISO(s), i === 0 ? "Cette semaine" : `Semaine du ${formatSemaine(s)}`])
   );
 
   return (
@@ -227,7 +228,7 @@ function TableClassement({
 }) {
   const [lignes, setLignes] = useState<LigneClassement[]>([]);
   const [chargement, setChargement] = useState(true);
-  const semaineIso = semaine?.toISOString().slice(0, 10) ?? "";
+  const semaineIso = semaine ? dateLocaleISO(semaine) : "";
 
   useEffect(() => {
     setChargement(true);

@@ -57,6 +57,7 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { label: "Corrections en attente", href: "/tutor/corrections", icon: ClipboardCheck },
     { label: "Défis", href: "/tutor/challenges", icon: Swords },
     { label: "Banque de questions", href: "/tutor/questions", icon: ListChecks },
+    { label: "Messages", href: "/tutor/messages", icon: MessageSquare },
   ],
   parent: [{ label: "Suivi de mon enfant", href: "/parent", icon: TrendingUp }],
   student: [

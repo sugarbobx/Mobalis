@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useStore } from "@/lib/store";
+import { dateLocaleISO } from "@/lib/dates";
 
 export default function AdminDashboardPage() {
   const { eleves, parents, matieres, repetiteurs, paiements, addPaiement, getMatieresActives, getEleve } = useStore();
@@ -152,7 +153,7 @@ function NouvelleFactureDialog({
   const [eleveId, setEleveId] = useState("");
   const [motif, setMotif] = useState("");
   const [montant, setMontant] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(dateLocaleISO(new Date()));
   const [envoi, setEnvoi] = useState(false);
 
   const eleve = eleves.find((e) => e.id === eleveId);

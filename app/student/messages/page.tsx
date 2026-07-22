@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Send, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -31,7 +31,7 @@ import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
 
 export default function StudentMessagesPage() {
-  const { getMessagesByEleve, getMatiere, demandesAide, addMessage, addDemandeAide, getEleve, getRepetiteur } = useStore();
+  const { getMessagesByEleve, getMatiere, demandesAide, addMessage, addDemandeAide, marquerMessagesLus, getEleve, getRepetiteur } = useStore();
   const CURRENT_STUDENT_ID = useCurrentUser().id;
   const eleve =
     getEleve(CURRENT_STUDENT_ID) ??
@@ -43,6 +43,13 @@ export default function StudentMessagesPage() {
   const [openAide, setOpenAide] = useState(false);
   const [matiereAide, setMatiereAide] = useState(eleve.matiereIds[0] ?? "");
   const [sujetAide, setSujetAide] = useState("");
+  const [ongletActif, setOngletActif] = useState(eleve.repetiteurIds[0]);
+
+  useEffect(() => {
+    const aLire = messages.filter((m) => m.repetiteurId === ongletActif && m.auteur === "repetiteur" && !m.lu).map((m) => m.id);
+    if (aLire.length > 0) void marquerMessagesLus(aLire);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ongletActif, messages.length]);
 
   function envoyer(repetiteurId: string) {
     if (!saisie.trim() || lectureSeule) return;
@@ -136,7 +143,7 @@ export default function StudentMessagesPage() {
         </Card>
       )}
 
-      <Tabs defaultValue={eleve.repetiteurIds[0]}>
+      <Tabs value={ongletActif} onValueChange={setOngletActif}>
         <TabsList>
           {eleve.repetiteurIds.map((id) => {
             const rep = getRepetiteur(id)!;

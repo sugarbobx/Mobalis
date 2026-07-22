@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -14,11 +15,12 @@ import { CompteLectureSeule } from "@/components/shared/compte-lecture-seule";
 import type { QuestionQCM, TypeExercice } from "@/lib/mock";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
+import { soumettreExerciceLibre, soumettreExerciceQcm } from "@/lib/exercices-eleve";
 
 type Devoirs = ReturnType<ReturnType<typeof useStore>["getDevoirsByEleve"]>;
 
 export function ExerciseRunner({ assignationId }: { assignationId: string }) {
-  const { getDevoirsByEleve, addSoumission, updateAssignation, getEleve } = useStore();
+  const { getDevoirsByEleve, getEleve } = useStore();
   const CURRENT_STUDENT_ID = useCurrentUser().id;
   const devoir = getDevoirsByEleve(CURRENT_STUDENT_ID).find((d) => d.assignation.id === assignationId);
   const lectureSeule = getEleve(CURRENT_STUDENT_ID)?.statutCompte === "diplome";
@@ -26,7 +28,12 @@ export function ExerciseRunner({ assignationId }: { assignationId: string }) {
   const [reponses, setReponses] = useState<Record<number, string>>({});
   const [reponseLibre, setReponseLibre] = useState("");
   const [soumis, setSoumis] = useState(false);
+  const [envoi, setEnvoi] = useState(false);
   const [scoreSimule, setScoreSimule] = useState<number | null>(null);
+  // Renvoyé par le serveur à la soumission (migration 0027) — jamais lu depuis
+  // exercice.questions ici : la copie en store peut encore être la version
+  // sans bonneReponseIndex chargée avant que l'élève ait répondu.
+  const [corrections, setCorrections] = useState<number[]>([]);
 
   if (!devoir) {
     return (
@@ -42,34 +49,24 @@ export function ExerciseRunner({ assignationId }: { assignationId: string }) {
   const { assignation, exercice, matiere, soumission } = devoir;
   const dejaTraite = assignation.statut !== "a_faire" || lectureSeule;
 
-  function valider() {
-    const date = "2026-07-06";
-    if (exercice.type === "qcm") {
-      const questions = exercice.questions ?? [];
-      const bonnesReponses = questions.filter((q, qi) => Number(reponses[qi]) === q.bonneReponseIndex).length;
-      const score = questions.length > 0 ? Math.round((bonnesReponses / questions.length) * 100) : 0;
-      setScoreSimule(score);
-      addSoumission({
-        assignationId: assignation.id,
-        eleveId: CURRENT_STUDENT_ID,
-        reponseQcm: Object.values(reponses).map(Number),
-        date,
-        statut: "auto_corrige",
-        scoreAuto: score,
-        scoreFinal: score,
-      });
-      updateAssignation(assignation.id, { statut: "corrige", score });
-    } else {
-      addSoumission({
-        assignationId: assignation.id,
-        eleveId: CURRENT_STUDENT_ID,
-        reponseLibre,
-        date,
-        statut: "en_attente_correction",
-      });
-      updateAssignation(assignation.id, { statut: "fait" });
+  async function valider() {
+    setEnvoi(true);
+    try {
+      if (exercice.type === "qcm") {
+        const nbQuestions = exercice.questions?.length ?? 0;
+        const reponsesOrdonnees = Array.from({ length: nbQuestions }, (_, qi) => Number(reponses[qi]));
+        const resultat = await soumettreExerciceQcm(assignation.id, reponsesOrdonnees);
+        setScoreSimule(resultat.score);
+        setCorrections(resultat.corrections);
+      } else {
+        await soumettreExerciceLibre(assignation.id, reponseLibre);
+      }
+      setSoumis(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Échec de la soumission");
+    } finally {
+      setEnvoi(false);
     }
-    setSoumis(true);
   }
 
   return (
@@ -100,6 +97,7 @@ export function ExerciseRunner({ assignationId }: { assignationId: string }) {
                 <DetailQcm
                   questions={exercice.questions}
                   reponsesChoisies={exercice.questions.map((_, qi) => Number(reponses[qi]))}
+                  bonnesReponses={corrections}
                 />
               )}
             </div>
@@ -123,8 +121,8 @@ export function ExerciseRunner({ assignationId }: { assignationId: string }) {
                   </RadioGroup>
                 </div>
               ))}
-              <Button onClick={valider} disabled={Object.keys(reponses).length < (exercice.questions?.length ?? 0)}>
-                Valider mes réponses
+              <Button onClick={valider} disabled={envoi || Object.keys(reponses).length < (exercice.questions?.length ?? 0)}>
+                {envoi ? "Envoi..." : "Valider mes réponses"}
               </Button>
             </div>
           ) : (
@@ -134,8 +132,8 @@ export function ExerciseRunner({ assignationId }: { assignationId: string }) {
                 <Label htmlFor="reponse">Ta réponse</Label>
                 <Textarea id="reponse" rows={6} value={reponseLibre} onChange={(e) => setReponseLibre(e.target.value)} placeholder="Rédige ta réponse ici..." />
               </div>
-              <Button onClick={valider} disabled={reponseLibre.trim().length === 0}>
-                Envoyer ma réponse
+              <Button onClick={valider} disabled={envoi || reponseLibre.trim().length === 0}>
+                {envoi ? "Envoi..." : "Envoyer ma réponse"}
               </Button>
             </div>
           )}
@@ -183,13 +181,25 @@ function ResultatSoumission({ type, score }: { type: TypeExercice; score: number
   );
 }
 
-function DetailQcm({ questions, reponsesChoisies }: { questions: QuestionQCM[]; reponsesChoisies: number[] }) {
+function DetailQcm({
+  questions,
+  reponsesChoisies,
+  bonnesReponses,
+}: {
+  questions: QuestionQCM[];
+  reponsesChoisies: number[];
+  /** index de la bonne réponse par question — jamais lu depuis q.bonneReponseIndex
+      ici, cette copie peut provenir d'un chargement d'avant soumission où le
+      serveur l'a masqué (voir lib/store.ts, vue exercices_client). */
+  bonnesReponses: number[];
+}) {
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium">Détail des réponses</p>
       {questions.map((q, qi) => {
         const choisi = reponsesChoisies[qi];
-        const correct = choisi === q.bonneReponseIndex;
+        const bonne = bonnesReponses[qi];
+        const correct = choisi === bonne;
         return (
           <div
             key={qi}
@@ -203,7 +213,7 @@ function DetailQcm({ questions, reponsesChoisies }: { questions: QuestionQCM[]; 
               Ta réponse : {q.choix[choisi] ?? "—"}
             </p>
             {!correct && (
-              <p className="text-muted-foreground">Bonne réponse : {q.choix[q.bonneReponseIndex]}</p>
+              <p className="text-muted-foreground">Bonne réponse : {q.choix[bonne] ?? "—"}</p>
             )}
           </div>
         );
@@ -223,7 +233,11 @@ function ResultatExistant({ devoir }: { devoir: Devoirs[number] }) {
         )}
       </div>
       {exercice.type === "qcm" && exercice.questions && soumission?.reponseQcm && (
-        <DetailQcm questions={exercice.questions} reponsesChoisies={soumission.reponseQcm} />
+        <DetailQcm
+          questions={exercice.questions}
+          reponsesChoisies={soumission.reponseQcm}
+          bonnesReponses={exercice.questions.map((q) => q.bonneReponseIndex)}
+        />
       )}
       {soumission?.reponseLibre && (
         <div className="space-y-1">

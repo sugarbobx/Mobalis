@@ -12,6 +12,7 @@ import {
   type DefiEleve,
   type LigneClassement,
 } from "@/lib/defis";
+import { dateLocaleISO } from "@/lib/dates";
 
 /** Carte du tableau de bord élève : prochain défi à jouer + mon rang de la semaine. */
 export function DefiDuMoment() {
@@ -29,7 +30,7 @@ export function DefiDuMoment() {
     );
   }, []);
 
-  const aujourdHui = new Date().toISOString().slice(0, 10);
+  const aujourdHui = dateLocaleISO(new Date());
   const prochain = defis.find(
     (d) => d.statut !== "joue" && d.dateDebut <= aujourdHui && aujourdHui <= d.dateFin
   );

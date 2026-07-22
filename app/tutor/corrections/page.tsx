@@ -24,7 +24,7 @@ import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
 
 export default function TutorCorrectionsPage() {
-  const { soumissions, assignations, getAssignation, getExercice, getMatiere, updateSoumission, updateAssignation, getEleve } = useStore();
+  const { soumissions, assignations, getAssignation, getExercice, getMatiere, updateSoumission, updateAssignationEleve, getEleve } = useStore();
   const CURRENT_TUTOR_ID = useCurrentUser().id;
   const [ouverte, setOuverte] = useState<Soumission | null>(null);
   const [score, setScore] = useState("");
@@ -60,7 +60,7 @@ export default function TutorCorrectionsPage() {
       scoreFinal,
       commentaireCorrection: commentaire.trim(),
     });
-    updateAssignation(ouverte.assignationId, { statut: "corrige", score: scoreFinal });
+    updateAssignationEleve(ouverte.assignationId, ouverte.eleveId, { statut: "corrige", score: scoreFinal });
     const eleve = getEleve(ouverte.eleveId);
     toast.success(`Correction enregistrée — ${eleve?.prenom} recevra ${scoreFinal}/100`);
     setOuverte(null);

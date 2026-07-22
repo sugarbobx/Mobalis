@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/client";
 import type { Classe } from "./mock/types";
+import { dateLocaleISO } from "./dates";
 
 /**
  * Accès aux défis QCM v2. Volontairement HORS du store/fetchAll : les
@@ -116,7 +117,7 @@ export async function getClassement(scope: "classe" | "centre", semaine: Date): 
   const supabase = createClient();
   const { data, error } = await supabase.rpc("get_classement", {
     p_scope: scope,
-    p_semaine: semaine.toISOString().slice(0, 10),
+    p_semaine: dateLocaleISO(semaine),
   });
   if (error || !data) return [];
   return mapClassement(data as Record<string, unknown>[]);
