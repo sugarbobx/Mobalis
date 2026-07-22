@@ -109,6 +109,14 @@ export async function getDefisEligibles(classe: Classe, matiereUnique: string | 
     }));
 }
 
+/** Publie un lot de QCM brouillon (les rend sélectionnables pour un push vers défi). */
+export async function publierQcm(exerciceIds: string[]): Promise<void> {
+  if (exerciceIds.length === 0) return;
+  const supabase = createClient();
+  const { error } = await supabase.from("exercices").update({ statut: "publie" }).in("id", exerciceIds);
+  if (error) throw error;
+}
+
 /** Pousse les QCM sélectionnés vers un défi existant (idempotent — repousser ne duplique rien). */
 export async function pousserQcmVersDefi(defiId: string, exerciceIds: string[]): Promise<void> {
   if (exerciceIds.length === 0) return;

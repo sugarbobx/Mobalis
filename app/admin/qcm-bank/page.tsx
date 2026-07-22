@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Layers, Rocket } from "lucide-react";
+import { Layers, Rocket, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +22,15 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useStore } from "@/lib/store";
-import { getBanqueQcm, getDefisEligibles, pousserQcmVersDefi, type QcmBanque, type DefiEligible, type Difficulte } from "@/lib/qcm-bank";
+import {
+  getBanqueQcm,
+  getDefisEligibles,
+  pousserQcmVersDefi,
+  publierQcm,
+  type QcmBanque,
+  type DefiEligible,
+  type Difficulte,
+} from "@/lib/qcm-bank";
 import type { Classe } from "@/lib/mock";
 
 const CLASSES: Classe[] = ["2nde", "1ère", "Tle"];
@@ -40,7 +49,6 @@ export default function AdminQcmBankPage() {
   const [matiereId, setMatiereId] = useState<string>("");
   const [classe, setClasse] = useState<Classe | "toutes">("toutes");
   const [chapitre, setChapitre] = useState<string>("toutes");
-  const [difficulte, setDifficulte] = useState<Difficulte | "toutes">("toutes");
 
   const [qcms, setQcms] = useState<QcmBanque[]>([]);
   const [chargement, setChargement] = useState(false);
@@ -56,7 +64,6 @@ export default function AdminQcmBankPage() {
     setSelection(new Set());
     setClasse("toutes");
     setChapitre("toutes");
-    setDifficulte("toutes");
     getBanqueQcm(matiereId).then((data) => {
       setQcms(data);
       setChargement(false);
@@ -72,10 +79,23 @@ export default function AdminQcmBankPage() {
     return qcms.filter((q) => {
       if (classe !== "toutes" && q.classe !== classe) return false;
       if (chapitre !== "toutes" && q.chapitreNom !== chapitre) return false;
-      if (difficulte !== "toutes" && !q.difficultes.some((d) => d.difficulte === difficulte)) return false;
       return true;
     });
-  }, [qcms, classe, chapitre, difficulte]);
+  }, [qcms, classe, chapitre]);
+
+  // Organisation principale demandée : par matière (onglets ci-dessus), puis
+  // par difficulté (sections ci-dessous). Un QCM peut apparaître dans
+  // plusieurs sections s'il a des difficultés différentes selon la série.
+  const groupesParDifficulte = useMemo(() => {
+    const groupes = new Map<Difficulte, QcmBanque[]>();
+    for (const d of DIFFICULTES) groupes.set(d, []);
+    for (const q of qcmsFiltres) {
+      for (const d of new Set(q.difficultes.map((x) => x.difficulte))) {
+        groupes.get(d)?.push(q);
+      }
+    }
+    return groupes;
+  }, [qcmsFiltres]);
 
   function toggleSelection(id: string, checked: boolean) {
     setSelection((prev) => {
@@ -86,25 +106,55 @@ export default function AdminQcmBankPage() {
     });
   }
 
-  function toggleTout(checked: boolean) {
-    // Un QCM brouillon ne peut pas être poussé (RLS) — on ne le propose pas à la sélection groupée.
-    setSelection(checked ? new Set(qcmsFiltres.filter((q) => q.statut === "publie").map((q) => q.id)) : new Set());
+  function toggleGroupe(ids: string[], checked: boolean) {
+    setSelection((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) (checked ? next.add(id) : next.delete(id));
+      return next;
+    });
   }
 
-  const classesSelection = useMemo(() => {
-    const set = new Set(qcms.filter((q) => selection.has(q.id)).map((q) => q.classe));
+  const selectionArr = Array.from(selection);
+  const selectionBrouillon = selectionArr.filter((id) => qcms.find((q) => q.id === id)?.statut === "brouillon");
+  const selectionPubliee = selectionArr.filter((id) => qcms.find((q) => q.id === id)?.statut === "publie");
+
+  const classesSelectionPubliee = useMemo(() => {
+    const set = new Set(qcms.filter((q) => selectionPubliee.includes(q.id)).map((q) => q.classe));
     return Array.from(set);
-  }, [qcms, selection]);
-  const selectionHomogene = classesSelection.length <= 1;
+  }, [qcms, selectionPubliee]);
+  const selectionHomogene = classesSelectionPubliee.length <= 1;
+
+  async function publier() {
+    if (selectionBrouillon.length === 0) return;
+    try {
+      await publierQcm(selectionBrouillon);
+      setQcms((prev) => prev.map((q) => (selectionBrouillon.includes(q.id) ? { ...q, statut: "publie" } : q)));
+      toast.success(`${selectionBrouillon.length} QCM publié${selectionBrouillon.length !== 1 ? "s" : ""}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Échec de la publication.");
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Banque QCM</h1>
         <p className="text-sm text-muted-foreground">
-          Parcours l&apos;intégralité de la banque et pousse un groupe de QCM vers un défi existant.
+          Organisée par matière puis par difficulté. Publie un QCM brouillon pour le rendre poussable vers un défi.
         </p>
       </div>
+
+      {matieres.length > 0 && (
+        <Tabs value={matiereId} onValueChange={setMatiereId}>
+          <TabsList className="flex-wrap">
+            {matieres.map((m) => (
+              <TabsTrigger key={m.id} value={m.id}>
+                {m.nom}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      )}
 
       <Card>
         <CardHeader>
@@ -113,21 +163,6 @@ export default function AdminQcmBankPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Matière</span>
-            <Select items={Object.fromEntries(matieres.map((m) => [m.id, m.nom]))} value={matiereId} onValueChange={(v) => v && setMatiereId(v)}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {matieres.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.nom}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">Classe</span>
             <Select
@@ -172,101 +207,85 @@ export default function AdminQcmBankPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Difficulté</span>
-            <Select
-              items={{ toutes: "Toutes", ...Object.fromEntries(DIFFICULTES.map((d) => [d, DIFFICULTE_LABEL[d]])) }}
-              value={difficulte}
-              onValueChange={(v) => v && setDifficulte(v as Difficulte | "toutes")}
-            >
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="toutes">Toutes</SelectItem>
-                {DIFFICULTES.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {DIFFICULTE_LABEL[d]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {qcmsFiltres.length} QCM{qcmsFiltres.length !== 1 ? "s" : ""} — {selection.size} sélectionné{selection.size !== 1 ? "s" : ""}
         </p>
-        <PousserDialog
-          selection={Array.from(selection)}
-          selectionHomogene={selectionHomogene}
-          classeSelection={classesSelection[0]}
-          matiereId={matiereId}
-          onPush={() => setSelection(new Set())}
-        />
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={selectionBrouillon.length === 0} onClick={publier}>
+            <CheckCircle2 />
+            Publier ({selectionBrouillon.length})
+          </Button>
+          <PousserDialog
+            selection={selectionPubliee}
+            selectionHomogene={selectionHomogene}
+            classeSelection={classesSelectionPubliee[0]}
+            matiereId={matiereId}
+            onPush={() => setSelection(new Set())}
+          />
+        </div>
       </div>
 
       {chargement ? (
         <p className="text-sm text-muted-foreground">Chargement…</p>
       ) : qcmsFiltres.length === 0 ? (
-        <EmptyState icon={Layers} title="Aucun QCM pour ces filtres" hint="Essaie d'élargir la classe ou la difficulté." />
+        <EmptyState icon={Layers} title="Aucun QCM pour ces filtres" hint="Essaie d'élargir la classe ou le chapitre." />
       ) : (
-        <Card>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={
-                        qcmsFiltres.some((q) => q.statut === "publie") &&
-                        qcmsFiltres.filter((q) => q.statut === "publie").every((q) => selection.has(q.id))
-                      }
-                      onCheckedChange={(checked) => toggleTout(checked === true)}
-                    />
-                  </TableHead>
-                  <TableHead>Titre</TableHead>
-                  <TableHead>Classe</TableHead>
-                  <TableHead>Chapitre</TableHead>
-                  <TableHead>Difficultés</TableHead>
-                  <TableHead>Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {qcmsFiltres.map((q) => (
-                  <TableRow key={q.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selection.has(q.id)}
-                        disabled={q.statut !== "publie"}
-                        onCheckedChange={(checked) => toggleSelection(q.id, checked === true)}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{q.titre}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{q.classe}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{q.chapitreNom}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {Array.from(new Set(q.difficultes.map((d) => d.difficulte))).map((d) => (
-                          <Badge key={d} variant="secondary" className="text-[10px]">
-                            {DIFFICULTE_LABEL[d]}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={q.statut === "publie" ? "default" : "outline"}>{q.statut === "publie" ? "Publié" : "Brouillon"}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          {DIFFICULTES.map((d) => {
+            const items = groupesParDifficulte.get(d) ?? [];
+            if (items.length === 0) return null;
+            const ids = items.map((q) => q.id);
+            const toutSelectionne = ids.every((id) => selection.has(id));
+            return (
+              <Card key={d}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Badge variant="secondary">{DIFFICULTE_LABEL[d]}</Badge>
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {items.length} QCM{items.length !== 1 ? "s" : ""}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox checked={toutSelectionne} onCheckedChange={(checked) => toggleGroupe(ids, checked === true)} />
+                        </TableHead>
+                        <TableHead>Titre</TableHead>
+                        <TableHead>Classe</TableHead>
+                        <TableHead>Chapitre</TableHead>
+                        <TableHead>Statut</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((q) => (
+                        <TableRow key={q.id}>
+                          <TableCell>
+                            <Checkbox checked={selection.has(q.id)} onCheckedChange={(checked) => toggleSelection(q.id, checked === true)} />
+                          </TableCell>
+                          <TableCell className="font-medium">{q.titre}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{q.classe}</Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{q.chapitreNom}</TableCell>
+                          <TableCell>
+                            <Badge variant={q.statut === "publie" ? "default" : "outline"}>{q.statut === "publie" ? "Publié" : "Brouillon"}</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -325,7 +344,10 @@ function PousserDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Pousser {selection.length} QCM vers un défi</DialogTitle>
-          <DialogDescription>Les QCM sélectionnés alimentent le tirage aléatoire de ce défi pour les élèves.</DialogDescription>
+          <DialogDescription>
+            Les QCM publiés sélectionnés alimentent le tirage aléatoire de ce défi pour les élèves — les brouillons
+            sélectionnés sont ignorés ici, publie-les d&apos;abord.
+          </DialogDescription>
         </DialogHeader>
 
         {!selectionHomogene ? (
