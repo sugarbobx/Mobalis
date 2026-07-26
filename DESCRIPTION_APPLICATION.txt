@@ -1,0 +1,272 @@
+MOBALIS — DESCRIPTION COMPLÈTE DE L'APPLICATION
+==================================================
+Dernière mise à jour : 2026-07-23
+
+
+1. QU'EST-CE QUE MOBALIS
+-------------------------
+Mobalis est une plateforme de gestion pédagogique multi-centres pour des
+centres de répétition / soutien scolaire au Cameroun. Un même déploiement
+héberge plusieurs centres indépendants (multi-tenancy) : chaque centre a ses
+propres élèves, répétiteurs, matières, défis, paiements, etc., strictement
+cloisonnés les uns des autres au niveau base de données (Row Level Security
+Postgres), pas seulement au niveau de l'interface.
+
+Quatre rôles utilisent l'application : Administrateur (directeur de centre),
+Répétiteur (enseignant), Parent, Élève. Chacun a son propre espace, sa
+propre navigation, et ne voit que ce que son rôle et ses relations
+(assignations, enfants, classes) autorisent.
+
+
+2. STACK TECHNIQUE
+-------------------
+Frontend / framework
+  - Next.js 16 (App Router, React Server Components + Client Components),
+    React 19, TypeScript strict.
+  - Tailwind CSS 4 pour le style, shadcn/ui + @base-ui/react comme
+    bibliothèque de composants (Dialog, Select, Tabs, Table, Card...).
+  - lucide-react pour les icônes, sonner pour les toasts, next-themes pour
+    le thème clair/sombre.
+
+Backend / données
+  - Supabase comme backend complet : Postgres (schéma relationnel classique,
+    UUID en clé primaire partout), Auth (email/mot de passe), Storage
+    (bulletins PDF), et RPC (fonctions Postgres `security definer` appelées
+    depuis le client pour toute logique sensible — scoring, paiements,
+    publication de comptes).
+  - Row Level Security (RLS) activée sur quasiment toutes les tables :
+    l'isolation multi-centre, les droits par rôle et les règles métier
+    (un élève ne voit que ses propres notes, un répétiteur ne voit que ses
+    élèves assignés, etc.) sont appliquées au niveau base de données, pas
+    seulement dans le code applicatif — même un bug côté client ou un accès
+    direct à l'API Supabase ne peut pas contourner ces règles.
+  - Pas de CLI Supabase lié au projet dans cet environnement : les
+    migrations sont des fichiers SQL numérotés (`supabase/migrations/NNNN_*.sql`),
+    appliqués manuellement via le SQL Editor du dashboard, dans l'ordre.
+    Chaque fichier committé correspond à un changement réellement exécuté
+    en base.
+
+Services externes
+  - APITemplate.io pour la génération des bulletins de notes en PDF (un
+    template distant rempli avec les données de l'élève).
+  - Mobile Money (MTN / Orange) : intégration actuellement mockée — un flux
+    de paiement complet existe (facture → confirmation → reçu) mais sans
+    connexion à une vraie passerelle de paiement.
+
+Tests
+  - Playwright installé pour des tests end-to-end.
+  - Vérifications ad hoc par scripts Node jetables (service role Supabase)
+    pour valider les migrations et RLS avant chaque déploiement de schéma —
+    pas un système de test permanent, une pratique de validation manuelle
+    rigoureuse avant chaque changement de base sensible.
+
+
+3. STRUCTURE DU CODE
+---------------------
+  app/                 Routes Next.js (App Router), une arborescence par rôle :
+    admin/             Espace administrateur (voir section 5)
+    tutor/              Espace répétiteur
+    student/           Espace élève
+    parent/            Espace parent (une seule page — tableau de suivi)
+    login/, inscription/   Authentification et inscription self-service
+    actions/           Server actions (ex. génération bulletin PDF)
+
+  components/          Composants React réutilisables :
+    ui/                Primitives shadcn/ui (Button, Card, Table, Dialog...)
+    student/, shared/  Composants métier (runner d'exercice, évaluateur de
+                       badges, états vides...)
+
+  lib/                 Logique applicative côté client, hors du store général
+                       quand le volume de données ne s'y prête pas (défis,
+                       banque QCM, révision, bulletins, paiements, notifs) :
+    store.ts           Store client central (fetch + cache + mutateurs) pour
+                       les entités "cœur" (élèves, matières, séances,
+                       exercices de bibliothèque, assignations, messages...)
+    mock/types.ts      Types TypeScript partagés (Eleve, Assignation, Classe,
+                       Serie, StatutAssignation...) — vestiges d'un ancien
+                       mode "mock" désormais entièrement branché sur Supabase
+    defis.ts, qcm-bank.ts, revision.ts, notifications.ts,
+    paiements-mobile-money.ts, bulletin-sequentiel.ts, exercices-eleve.ts
+                       Modules dédiés à chaque domaine, chacun appelant
+                       directement Supabase (souvent via des RPC) plutôt
+                       que de passer par le store général
+
+  supabase/migrations/ Historique SQL complet, source de vérité du schéma.
+                       README.md documente la procédure de création d'un
+                       centre et de suppression des données d'un élève
+                       (conformité mineurs).
+
+  utils/supabase/      Trois clients Supabase distincts : `client.ts`
+                       (navigateur, clé publique, respecte RLS), `server.ts`
+                       (Server Components/Actions, respecte RLS avec la
+                       session cookie), `admin.ts` (clé service role,
+                       bypass RLS — réservé aux opérations serveur qui
+                       doivent volontairement ignorer l'isolation, ex.
+                       création de compte auth par un admin)
+
+
+4. MODÈLE DE DONNÉES — CONCEPTS CLÉS
+--------------------------------------
+  - centres : un centre = un tenant. Toutes les tables "racine" ont un
+    centre_id (sauf la banque de QCM globale, volontairement partagée).
+  - eleves / repetiteurs / parents / admins : les 4 profils métier, chacun
+    lié en option à un auth.users (compte de connexion — un profil peut
+    exister sans compte tant qu'il n'a pas été "activé").
+  - eleve_repetiteurs : table de liaison qui définit quel répétiteur suit
+    quel élève — pivot central de toutes les règles de visibilité
+    répétiteur (ses élèves, ses défis, ses messages...).
+  - matieres / chapitres / notions : taxonomie pédagogique, à deux niveaux
+    — une version par centre (contenu propre au centre) et une banque
+    globale (centre_id NULL) partagée par tous les centres, notamment pour
+    la banque de 5000 QCM.
+  - exercices : contenu pédagogique (QCM ou question libre), soit propre à
+    un centre (créé par un répétiteur), soit global (banque QCM, statut
+    brouillon → publié avant d'être exploitable).
+  - assignations / assignation_eleves : un exercice devient un "devoir" via
+    une assignation ; l'état (fait / non fait / score) est suivi par élève
+    (assignation_eleves), pas par assignation, pour gérer correctement les
+    devoirs donnés à un groupe.
+  - defis / defi_participations / defi_exercices : système de défis QCM
+    chronométrés, hebdomadaires (un répétiteur, sa matière, sa classe) ou
+    mensuels (l'admin, toutes matières). Chaque élève reçoit un tirage
+    aléatoire individuel de questions, figé au démarrage — deux élèves ne
+    voient jamais exactement le même questionnaire. Depuis cette session,
+    un défi hebdomadaire n'est visible et jouable que par les élèves du
+    répétiteur qui l'a créé (deux répétiteurs de la même matière/classe
+    peuvent chacun publier leur propre défi, pour leurs groupes respectifs).
+  - sequences / matiere_coefficients / bulletin_pdfs : bulletin de notes
+    séquentiel, avec moyennes pondérées par coefficient et export PDF.
+  - paiements : facturation et suivi des paiements (mobile money mocké).
+  - notifications : file d'attente + préférence de fréquence par parent
+    (immédiat ou groupé), déclenchée par des triggers sur notes/absences/
+    remarques/paiements.
+  - badges : moteur d'évaluation automatique de badges de mérite (série de
+    bonnes réponses, progression, assiduité...), évalué à chaque connexion
+    élève.
+  - messages / demandes_aide : messagerie interne élève ↔ répétiteur.
+
+
+5. PARCOURS PAR RÔLE
+----------------------
+
+5.1 ADMINISTRATEUR (directeur de centre)
+  Accès : `/admin/*`. Voit et gère tout ce qui appartient à son centre —
+  jamais les autres centres (RLS).
+
+  - Tableau de bord (/admin) : vue d'ensemble du centre, paiements récents.
+  - Élèves (/admin/eleves) : fiches élèves, classe/série, matières suivies,
+    répétiteurs assignés.
+  - Répétiteurs (/admin/repetiteurs) : gestion des profils enseignants,
+    matières enseignées, élèves assignés.
+  - Matières (/admin/subjects) : référentiel matières du centre.
+  - Bibliothèque d'exercices (/admin/exercises) : contenu pédagogique propre
+    au centre, réutilisable par les répétiteurs.
+  - Banque QCM (/admin/qcm-bank) : accès à la banque globale de ~5000 QCM
+    (partagée entre tous les centres), organisée par matière (onglets) puis
+    par difficulté (facile/moyen/difficile/genius), filtrable par classe et
+    chapitre. Deux actions : publier des QCM en brouillon (les rendre
+    utilisables), puis les pousser vers un défi existant du centre (hebdo
+    ou mensuel) — la création du défi cible est un préalable obligatoire,
+    impossible de pousser vers un défi qui n'existe pas.
+  - Fin d'année (/admin/fin-annee) : passage de classe, résultats du BAC,
+    diplomation ou redoublement en cas d'échec.
+  - Défis — tour de contrôle (/admin/challenges) : vue d'ensemble de tous
+    les défis du centre (hebdo + mensuels), suivi de participation.
+  - Notifications (/admin/notifications) : supervision des notifications
+    envoyées aux parents.
+  - Comptes (/admin/accounts) : création des identifiants de connexion
+    (répétiteurs, parents, élèves) — un profil peut exister sans compte
+    tant qu'aucun identifiant ne lui a été créé ; listes paginées par
+    catégorie (20 comptes par page) pour rester lisible à grande échelle.
+  - Paramètres (/admin/parametres) : configuration du centre.
+
+5.2 RÉPÉTITEUR (enseignant)
+  Accès : `/tutor/*`. Ne voit que ses propres élèves assignés
+  (eleve_repetiteurs) et les matières qu'il enseigne.
+
+  - Cahier de texte (/tutor) : séances données, contenu couvert.
+  - Exercices (/tutor/exercises) : création et assignation d'exercices
+    (QCM ou question libre) à un ou plusieurs élèves.
+  - Corrections en attente (/tutor/corrections) : correction manuelle des
+    réponses libres soumises par les élèves.
+  - Défis (/tutor/challenges) : création de défis hebdomadaires pour ses
+    propres classes (une classe où il a au moins un élève, une matière
+    qu'il enseigne) — visibles uniquement par ses élèves à lui, même si
+    un autre répétiteur enseigne la même matière à la même classe.
+  - Banque de questions (/tutor/questions) : alimentation de la banque de
+    questions "legacy" utilisée en secours par les défis quand la banque
+    QCM curée est insuffisante.
+  - Messages (/tutor/messages) : messagerie avec ses élèves + traitement
+    des demandes d'aide.
+
+5.3 ÉLÈVE
+  Accès : `/student/*`. Ne voit que ses propres données et le contenu qui
+  lui a été explicitement assigné ou rendu public par son centre.
+
+  - Aujourd'hui (/student) : vue du jour — devoirs à faire, défi du moment.
+  - Emploi du temps (/student/schedule) : séances planifiées.
+  - Devoirs (/student/homework) : exercices assignés, statut par élève.
+  - Exercices (/student/exercises) : passage des exercices — le scoring
+    QCM est calculé côté serveur (RPC `soumettre_exercice`), le client ne
+    voit jamais la bonne réponse avant d'avoir soumis.
+  - Défis (/student/challenges) : défis disponibles (hebdo de ses
+    répétiteurs + mensuels du centre), classement hebdomadaire et annuel.
+  - Révision (/student/revision) : sessions de révision par chapitre, avec
+    suivi de maîtrise.
+  - Notes & objectifs (/student/grades) : bulletin, moyennes, objectifs.
+  - Ressources (/student/resources) : documents mis à disposition.
+  - Messagerie (/student/messages) : messages avec ses répétiteurs, envoi
+    de demandes d'aide.
+  - Profil (/student/profile) : informations personnelles.
+
+5.4 PARENT
+  Accès : `/parent`. Une page de suivi centrée sur son ou ses enfants —
+  notes, présence, paiements, notifications — jamais d'accès aux outils de
+  création de contenu ou aux autres élèves du centre.
+
+
+6. INTERACTIONS ENTRE RÔLES
+------------------------------
+  - Admin → Répétiteur/Parent/Élève : crée les comptes de connexion,
+    supervise l'activité du centre, gère la fin d'année scolaire.
+  - Répétiteur → Élève : assigne des exercices, corrige les réponses
+    libres, publie des défis hebdomadaires réservés à ses élèves,
+    échange par messagerie, répond aux demandes d'aide.
+  - Élève → Répétiteur : soumet des exercices et des défis, envoie des
+    messages et des demandes d'aide.
+  - Élève → Parent (indirect) : les résultats, absences et paiements de
+    l'élève déclenchent des notifications vers le(s) parent(s), avec une
+    fréquence configurable (immédiat ou groupé) par parent.
+  - Parent → Admin (indirect) : les paiements effectués par le parent
+    (mobile money mocké) mettent à jour la facturation suivie par l'admin.
+  - Admin → Banque QCM globale : la banque de ~5000 QCM est partagée entre
+    tous les centres (contenu non lié à un centre précis) ; chaque admin
+    publie et pousse vers ses propres défis, sans jamais pouvoir modifier
+    le contenu d'un autre centre.
+
+  Dans tous les cas, ces interactions ne reposent pas sur une simple
+  discipline côté interface : elles sont garanties par les policies RLS en
+  base de données, de sorte qu'un utilisateur ne peut techniquement pas
+  lire ou modifier une donnée hors de son périmètre, même en contournant
+  l'interface (appel direct à l'API Supabase, session volée, etc.).
+
+
+7. FONCTIONNALITÉS TRANSVERSALES
+-----------------------------------
+  - Multi-tenancy strict par centre (RLS).
+  - Authentification email/mot de passe (Supabase Auth), inscription
+    self-service pour un nouveau centre (création différée à la
+    confirmation de l'email, pour éviter qu'un centre soit lié à une
+    mauvaise adresse).
+  - Notifications aux parents avec fréquence configurable.
+  - Paiements (mobile money mocké) avec verrouillage anti-double-clic.
+  - Bulletins de notes séquentiels, moyennes pondérées, export PDF.
+  - Moteur de badges de mérite, évalué automatiquement à la connexion.
+  - Banque de QCM globale (~5000 questions), organisée par matière et
+    difficulté, avec flux de publication (brouillon → publié) et pont vers
+    les défis.
+  - Défis chronométrés à tirage individuel (anti-triche), hebdomadaires
+    (répétiteur, scopés à ses propres élèves) et mensuels (admin, tout le
+    centre), avec classement hebdomadaire et annuel.
+  - Système de révision par chapitre avec suivi de maîtrise.
+  - Messagerie interne + demandes d'aide élève ↔ répétiteur.
