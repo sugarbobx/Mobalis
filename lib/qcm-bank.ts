@@ -24,6 +24,7 @@ export interface QcmBanque {
   notionNom: string;
   statut: "brouillon" | "publie";
   difficultes: { serie: Serie; difficulte: Difficulte }[];
+  choix: { texte: string; estCorrect: boolean; ordre: number }[];
 }
 
 export interface DefiEligible {
@@ -49,7 +50,7 @@ export async function getBanqueQcm(matiereId: string): Promise<QcmBanque[]> {
   const { data, error } = await supabase
     .from("exercices")
     .select(
-      "id, titre, enonce, matiere_id, statut, matieres(nom), notions(nom, chapitres(nom, classe)), exercice_difficulte_serie(serie, difficulte)"
+      "id, titre, enonce, matiere_id, statut, matieres(nom), notions(nom, chapitres(nom, classe)), exercice_difficulte_serie(serie, difficulte), exercice_choix(texte_choix, est_correct, ordre)"
     )
     .is("centre_id", null)
     .eq("type", "qcm")
@@ -74,6 +75,9 @@ export async function getBanqueQcm(matiereId: string): Promise<QcmBanque[]> {
         serie: d.serie as Serie,
         difficulte: d.difficulte as Difficulte,
       })),
+      choix: (r.exercice_choix as Row[])
+        .map((c) => ({ texte: c.texte_choix as string, estCorrect: c.est_correct as boolean, ordre: c.ordre as number }))
+        .sort((a, b) => a.ordre - b.ordre),
     }));
 }
 
