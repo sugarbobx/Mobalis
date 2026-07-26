@@ -69,6 +69,7 @@ export default function TutorChallengesPage() {
         .from("defis")
         .select("id, type, titre, matiere_id, classe, nb_questions, date_debut, date_fin, defi_participations(eleve_id, score, submitted_at)")
         .eq("type", "hebdo")
+        .eq("created_by", tutorId)
         .order("date_debut", { ascending: false }),
       supabase.from("questions").select("matiere_id, classe"),
     ]);
