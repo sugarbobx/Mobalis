@@ -35,6 +35,8 @@ import { getMesNotifications, type Notification } from "@/lib/notifications";
 import { confirmerPaiement, type MethodePaiement } from "@/lib/paiements-mobile-money";
 import { BulletinDownloadButton } from "@/components/shared/bulletin-download-button";
 import { getSequences, type Sequence } from "@/lib/bulletin-sequentiel";
+import { construireSeriesROI } from "@/lib/roi";
+import { RoiChart } from "@/components/parent/roi-chart";
 
 const FREQUENCE_ITEMS = { immediat: "Immédiate", hebdomadaire: "Hebdomadaire" };
 
@@ -166,10 +168,12 @@ function NotificationsRecues() {
 }
 
 function EnfantROI({ eleveId }: { eleveId: string }) {
-  const { getEvaluationsByMatiere, getDevoirsByEleve, getScoreMoyen, getMatiere, getEleve, getBulletinsByEleve, getPaiementsByEleve, getRepetiteur, marquerPaiementConfirme } = useStore();
+  const { getEvaluationsByMatiere, getEvaluationsByEleve, getDevoirsByEleve, getScoreMoyen, getMatiere, getEleve, getBulletinsByEleve, getPaiementsByEleve, getRepetiteur, marquerPaiementConfirme } = useStore();
   const eleve = getEleve(eleveId)!;
   const bulletins = getBulletinsByEleve(eleveId);
   const paiements = getPaiementsByEleve(eleveId);
+  const evaluations = getEvaluationsByEleve(eleveId);
+  const seriesROI = construireSeriesROI(paiements, evaluations);
   // Les exercices "diagnostic" (positionnement) ne sont pas visibles côté parent (§2.2/§3.3).
   const devoirs = getDevoirsByEleve(eleveId).filter((d) => d.exercice.type !== "diagnostic");
   const devoirsCorriges = devoirs.filter((d) => d.assignation.statut === "corrige");
@@ -203,6 +207,16 @@ function EnfantROI({ eleveId }: { eleveId: string }) {
         <StatCard label="Score moyen aux exercices" value={scoreMoyen !== null ? `${scoreMoyen}/100` : "—"} icon={Target} />
         <StatCard label="Paiements à régler" value={paiementsEnAttente} icon={CreditCard} hint={paiementsEnAttente > 0 ? "à traiter" : "à jour"} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Investissement &amp; résultats</CardTitle>
+          <CardDescription>Dépenses cumulées et moyenne mensuelle, toutes matières confondues.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RoiChart data={seriesROI} />
+        </CardContent>
+      </Card>
 
       {bulletins.length > 0 && (
         <Card>

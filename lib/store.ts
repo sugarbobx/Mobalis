@@ -580,6 +580,8 @@ export function useStore() {
         .map((b) => ({ ...state.badges.find((badge) => badge.id === b.badgeId)!, dateObtention: b.date })),
     getObjectifsByEleve: (eleveId: string) => state.objectifs.filter((o) => o.eleveId === eleveId),
     getEleve: (id: string) => state.eleves.find((e) => e.id === id),
+    getElevesByRepetiteur: (repetiteurId: string) =>
+      state.eleves.filter((e) => e.repetiteurIds.includes(repetiteurId)),
     getElevesBySerie: (serie: Serie) => state.eleves.filter((e) => e.serie === serie),
     getParent: (id: string) => state.parents.find((p) => p.id === id),
     getBulletinsByEleve: (eleveId: string) => state.bulletins.filter((b) => b.eleveId === eleveId).sort((a, b) => b.anneeScolaire.localeCompare(a.anneeScolaire)),

@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { DefiDuMoment } from "@/components/student/defi-du-moment";
+import { ProfilProgression } from "@/components/student/profil-progression";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
 
@@ -61,6 +62,8 @@ export default function StudentTodayPage() {
           <p className="text-sm">{messageEntree}</p>
         </div>
       )}
+
+      <ProfilProgression />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Moyenne générale" value={scoreMoyen !== null ? `${scoreMoyen}/100` : "—"} icon={Target} accent />
