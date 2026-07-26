@@ -45,7 +45,7 @@ interface LigneEleve {
 }
 
 export function HeatmapMaitrise() {
-  const { getElevesByRepetiteur, getMatiere } = useStore();
+  const { getElevesByRepetiteur, getMatiere, derniereSyncAt } = useStore();
   const repetiteurId = useCurrentUser().id;
   const eleves = getElevesByRepetiteur(repetiteurId);
 
@@ -66,7 +66,10 @@ export function HeatmapMaitrise() {
     };
   }, []);
 
-  if (chargement) {
+  // derniereSyncAt === null : le store racine (source de `eleves`) n'a pas
+  // encore fini son propre fetchAll() — sans ce garde, un tableau vide
+  // temporaire affiche à tort "Aucun élève rattaché" au premier rendu.
+  if (chargement || derniereSyncAt === null) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-sm text-muted-foreground">Chargement…</CardContent>

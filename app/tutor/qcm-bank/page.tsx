@@ -7,7 +7,7 @@ import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/current-user-context";
 
 export default function TutorQcmBankPage() {
-  const { getRepetiteur, getMatiere } = useStore();
+  const { getRepetiteur, getMatiere, derniereSyncAt } = useStore();
   const repetiteurId = useCurrentUser().id;
   const tutor = getRepetiteur(repetiteurId);
   const mesMatieres = (tutor?.matiereIds ?? []).map((id) => getMatiere(id)).filter((m): m is NonNullable<typeof m> => !!m);
@@ -21,7 +21,9 @@ export default function TutorQcmBankPage() {
         </p>
       </div>
 
-      {mesMatieres.length === 0 ? (
+      {derniereSyncAt === null ? (
+        <p className="text-sm text-muted-foreground">Chargement…</p>
+      ) : mesMatieres.length === 0 ? (
         <EmptyState icon={BookOpen} title="Aucune matière assignée" hint="Contacte l'administration pour te faire assigner une matière." />
       ) : (
         <QcmBanqueExplorer matieres={mesMatieres} />

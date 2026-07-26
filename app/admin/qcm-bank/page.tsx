@@ -22,7 +22,7 @@ import { getDefisEligibles, pousserQcmVersDefi, publierQcm, type QcmBanque, type
 import type { Classe } from "@/lib/mock";
 
 export default function AdminQcmBankPage() {
-  const { getMatieresActives } = useStore();
+  const { getMatieresActives, derniereSyncAt } = useStore();
   const matieres = getMatieresActives();
 
   return (
@@ -34,13 +34,17 @@ export default function AdminQcmBankPage() {
         </p>
       </div>
 
-      <QcmBanqueExplorer
-        matieres={matieres}
-        selectionActive
-        renderToolbar={({ selection, qcms, clearSelection }) => (
-          <Toolbar selection={selection} qcms={qcms} clearSelection={clearSelection} />
-        )}
-      />
+      {derniereSyncAt === null ? (
+        <p className="text-sm text-muted-foreground">Chargement…</p>
+      ) : (
+        <QcmBanqueExplorer
+          matieres={matieres}
+          selectionActive
+          renderToolbar={({ selection, qcms, clearSelection }) => (
+            <Toolbar selection={selection} qcms={qcms} clearSelection={clearSelection} />
+          )}
+        />
+      )}
     </div>
   );
 }
@@ -134,6 +138,7 @@ function PousserDialog({
       await pousserQcmVersDefi(defiId, selection);
       toast.success(`${selection.length} QCM poussé${selection.length !== 1 ? "s" : ""} vers le défi.`);
       setOpen(false);
+      setDefisChargesPour(null);
       onPush();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Échec du push.");
